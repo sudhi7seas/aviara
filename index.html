@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Aviara">
+<meta name="theme-color" content="#060C06">
+<title>Aviara · Bird ID</title>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Crimson+Pro:ital,wght@0,300;0,400;0,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#060C06;--srf:#0B160B;--card:#0F1A10;--elev:#152216;
+  --gold:#C8972A;--gold2:#E8B84B;--sage:#3D6B4A;--sage2:#5A9B6D;
+  --t1:#F0E6C8;--t2:#A89B7A;--t3:#5E5240;--bdr:rgba(200,151,42,0.16);
+  --tab-h:56px;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;height:-webkit-fill-available}
+body{font-family:'Crimson Pro',Georgia,serif;background:var(--bg);color:var(--t1);overflow:hidden}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 80% 60% at 15% 8%,rgba(61,107,74,.10) 0%,transparent 60%),
+             radial-gradient(ellipse 60% 50% at 85% 92%,rgba(200,151,42,.05) 0%,transparent 55%)}
+
+/* ── screens ── */
+.scr{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;
+  transition:opacity .3s,transform .3s}
+.scr.off{opacity:0;pointer-events:none;transform:translateY(14px)}
+
+/* ── tab bar (shared by LI + ST screens) ── */
+.tab-bar{
+  position:fixed;bottom:0;left:0;right:0;z-index:30;
+  height:calc(var(--tab-h) + env(safe-area-inset-bottom));
+  background:var(--card);border-top:1px solid var(--bdr);
+  display:flex;align-items:stretch;
+}
+.tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:3px;cursor:pointer;touch-action:manipulation;
+  padding-bottom:env(safe-area-inset-bottom)}
+.tab-btn span.ti{font-size:20px;line-height:1}
+.tab-btn span.tl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px}
+.tab-btn.act span.tl{color:var(--gold)}
+.tab-btn.act span.ti{filter:drop-shadow(0 0 6px rgba(200,151,42,.5))}
+
+/* ── LOAD ── */
+#LD{justify-content:center;padding:28px 22px}
+.ld-bird{font-size:68px;margin-bottom:18px;
+  filter:drop-shadow(0 0 22px rgba(200,151,42,.45));animation:float 2.8s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+.ld-logo{font-family:'Playfair Display',serif;font-size:44px;font-weight:700;
+  color:var(--gold);letter-spacing:-1px;margin-bottom:5px}
+.ld-tag{font-size:15px;color:var(--t2);font-style:italic;margin-bottom:44px}
+.ld-card{background:var(--card);border:1px solid var(--bdr);border-radius:22px;
+  padding:24px 22px;width:100%;max-width:370px}
+.ld-step{display:flex;align-items:center;gap:10px;font-size:13px;
+  color:var(--t3);margin-bottom:11px;transition:color .3s}
+.ld-step.on{color:var(--t1)}.ld-step.ok{color:var(--sage2)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--t3);flex-shrink:0;transition:background .3s}
+.ld-step.on .dot{background:var(--gold);animation:pdot .7s ease-in-out infinite}
+.ld-step.ok .dot{background:var(--sage2)}
+@keyframes pdot{0%,100%{transform:scale(1)}50%{transform:scale(2)}}
+.prog-track{background:var(--elev);border-radius:99px;height:5px;overflow:hidden;margin:16px 0 14px}
+.prog-fill{height:100%;border-radius:99px;
+  background:linear-gradient(90deg,var(--sage2),var(--gold));width:2%;transition:width .5s ease}
+.ld-note{font-size:11px;color:var(--t3);font-style:italic;line-height:1.55}
+
+/* ── LISTEN ── */
+#LI{padding:0;justify-content:flex-start;
+  padding-bottom:calc(var(--tab-h) + env(safe-area-inset-bottom))}
+.topbar{display:flex;justify-content:space-between;align-items:center;width:100%;
+  padding:10px 16px;padding-top:max(10px,env(safe-area-inset-top) + 4px);flex-shrink:0}
+.toplogo{font-family:'Playfair Display',serif;font-size:21px;font-weight:700;color:var(--gold)}
+.icobtn{background:var(--elev);border:1px solid var(--bdr);border-radius:10px;
+  width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;font-size:15px;touch-action:manipulation}
+
+.spec-wrap{width:100%;position:relative;flex-shrink:0;background:var(--srf)}
+#specCanvas{width:100%;height:110px;display:block}
+.spec-lbl{position:absolute;top:5px;left:9px;font-size:9px;
+  color:rgba(200,151,42,.4);text-transform:uppercase;letter-spacing:1.6px}
+.freq-axis{position:absolute;right:6px;top:0;bottom:0;display:flex;flex-direction:column;
+  justify-content:space-between;padding:4px 0;font-size:8px;color:rgba(200,151,42,.28)}
+
+.wave-wrap{width:100%;height:42px;padding:3px 0;flex-shrink:0}
+#waveCanvas{width:100%;height:100%}
+
+.ctrls{display:flex;align-items:center;gap:14px;padding:8px 16px;flex-shrink:0;width:100%}
+#statusLbl{flex:1;font-size:11px;color:var(--t2);text-transform:uppercase;letter-spacing:1.8px}
+#statusLbl.on{color:var(--gold2);animation:blink 1.2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+#listenBtn{background:var(--gold);color:var(--bg);border:none;border-radius:99px;
+  padding:11px 22px;font-family:'Playfair Display',serif;font-size:15px;font-weight:700;
+  letter-spacing:.3px;cursor:pointer;white-space:nowrap;touch-action:manipulation;
+  transition:all .18s;box-shadow:0 4px 18px rgba(200,151,42,.28)}
+#listenBtn:active{transform:scale(.93);opacity:.82}
+#listenBtn.stop{background:transparent;color:var(--gold);border:1.5px solid var(--gold);box-shadow:none}
+
+.feed-bar{display:flex;justify-content:space-between;align-items:center;
+  width:100%;padding:5px 16px 4px;flex-shrink:0}
+.feed-ttl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1.6px}
+.feed-clr{font-size:11px;color:var(--t3);cursor:pointer;touch-action:manipulation;padding:4px}
+
+#feed{flex:1;overflow-y:auto;width:100%;padding:0 12px;
+  -webkit-overflow-scrolling:touch}
+.empty{text-align:center;padding:32px 20px;color:var(--t3);font-style:italic;
+  font-size:15px;line-height:1.7}
+.det{display:flex;justify-content:space-between;align-items:center;
+  background:var(--card);border:1px solid var(--bdr);border-radius:14px;
+  padding:11px 14px;margin-bottom:8px;cursor:pointer;touch-action:manipulation;
+  transition:background .15s;animation:slideIn .28s ease}
+.det:active{background:var(--elev)}
+@keyframes slideIn{from{opacity:0;transform:translateY(-7px)}to{opacity:1;transform:none}}
+.det-l{min-width:0}
+.det-name{font-size:17px;color:var(--t1);line-height:1.2;margin-bottom:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.det-sci{font-size:11px;color:var(--t3);font-style:italic}
+.det-bar{height:3px;border-radius:99px;background:var(--elev);margin-top:6px;overflow:hidden}
+.det-bar-fill{height:100%;border-radius:99px}
+.det-r{text-align:right;flex-shrink:0;margin-left:10px}
+.det-pct{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;line-height:1;margin-bottom:2px}
+.det-t{font-size:10px;color:var(--t3)}
+.hi{color:var(--gold2)}.md{color:var(--sage2)}.lo{color:var(--t2)}
+
+/* ── STATS ── */
+#ST{padding:0;justify-content:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding-bottom:calc(var(--tab-h) + env(safe-area-inset-bottom))}
+
+.st-header{display:flex;justify-content:space-between;align-items:center;
+  width:100%;padding:12px 16px;
+  padding-top:max(12px,env(safe-area-inset-top) + 6px);flex-shrink:0}
+.st-title{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:var(--t1)}
+.export-btn{display:flex;align-items:center;gap:6px;background:var(--elev);
+  border:1px solid var(--bdr);border-radius:10px;padding:8px 12px;
+  cursor:pointer;touch-action:manipulation;font-size:13px;color:var(--gold);
+  font-family:'Crimson Pro',serif;transition:background .15s}
+.export-btn:active{background:var(--card)}
+
+.st-body{width:100%;padding:0 14px 16px;display:flex;flex-direction:column;
+  gap:16px;max-width:450px;margin:0 auto}
+
+/* summary pills */
+.summary-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.sum-pill{background:var(--card);border:1px solid var(--bdr);border-radius:14px;
+  padding:12px 10px;text-align:center}
+.sum-n{font-family:'Playfair Display',serif;font-size:26px;font-weight:700;color:var(--gold)}
+.sum-l{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+
+/* section heading */
+.sec-head{font-size:10px;color:var(--t3);text-transform:uppercase;
+  letter-spacing:1.6px;margin-bottom:-4px}
+
+/* frequent visitor cards */
+.vis-card{display:flex;align-items:center;gap:12px;
+  background:var(--card);border:1px solid var(--bdr);border-radius:14px;
+  padding:12px 14px;cursor:pointer;touch-action:manipulation;transition:background .15s}
+.vis-card:active{background:var(--elev)}
+.vis-rank{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;
+  width:28px;text-align:center;flex-shrink:0}
+.rank-1{color:#FFD700}.rank-2{color:#C0C0C0}.rank-3{color:#CD7F32}.rank-rest{color:var(--t3)}
+.vis-info{flex:1;min-width:0}
+.vis-name{font-size:16px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vis-sci{font-size:11px;color:var(--t3);font-style:italic;margin-top:1px}
+.vis-bar-wrap{height:3px;background:var(--elev);border-radius:99px;margin-top:6px;overflow:hidden}
+.vis-bar-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--sage2),var(--gold))}
+.vis-count{text-align:right;flex-shrink:0}
+.vis-n{font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--gold2)}
+.vis-seen{font-size:10px;color:var(--t3);margin-top:2px}
+
+/* history list */
+.hist-item{display:flex;justify-content:space-between;align-items:center;
+  padding:9px 14px;border-bottom:1px solid rgba(200,151,42,.08);
+  cursor:pointer;touch-action:manipulation;transition:background .15s}
+.hist-item:last-child{border-bottom:none}
+.hist-item:active{background:var(--elev)}
+.hist-wrap{background:var(--card);border:1px solid var(--bdr);border-radius:14px;overflow:hidden}
+.hist-name{font-size:15px;color:var(--t1)}
+.hist-sci{font-size:10px;color:var(--t3);font-style:italic;margin-top:1px}
+.hist-right{text-align:right;flex-shrink:0;margin-left:10px}
+.hist-pct{font-size:14px;font-weight:600}
+.hist-time{font-size:10px;color:var(--t3);margin-top:1px}
+
+.clr-hist{width:100%;background:transparent;border:1px solid rgba(190,55,45,.3);
+  border-radius:12px;padding:12px;color:rgba(231,76,60,.7);
+  font-family:'Crimson Pro',serif;font-size:14px;cursor:pointer;
+  touch-action:manipulation;transition:all .15s}
+.clr-hist:active{background:rgba(190,55,45,.1)}
+
+/* ── INFO ── */
+#IN{justify-content:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.info-hdr{display:flex;align-items:center;gap:12px;width:100%;
+  padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top) + 6px);
+  flex-shrink:0;position:sticky;top:0;z-index:5;
+  background:linear-gradient(var(--bg) 85%,transparent)}
+.info-hdr-lbl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1.8px}
+#infoBody{width:100%;padding:0 14px;
+  padding-bottom:max(32px,env(safe-area-inset-bottom)+20px);
+  display:flex;flex-direction:column;gap:12px;max-width:450px;margin:0 auto}
+
+.photo-wrap{width:100%;border-radius:20px;overflow:hidden;
+  position:relative;aspect-ratio:4/3;background:var(--elev)}
+.photo-wrap img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:88px}
+.cs-badge{padding:5px 11px;border-radius:20px;font-size:10px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.6px;display:inline-block}
+.cs-badge.abs{position:absolute;top:11px;right:11px;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.lc{background:rgba(39,174,96,.86);color:#fff}.nt{background:rgba(243,156,18,.86);color:#fff}
+.vu{background:rgba(230,126,34,.86);color:#fff}.en{background:rgba(231,76,60,.86);color:#fff}
+.cr{background:rgba(155,35,24,.92);color:#fff}.dd{background:rgba(90,90,90,.86);color:#fff}
+
+.name-card{background:var(--card);border:1px solid var(--bdr);border-radius:18px;padding:18px}
+.c-name{font-family:'Playfair Display',serif;font-size:30px;font-weight:700;line-height:1.1;margin-bottom:4px}
+.s-name{font-size:16px;color:var(--gold);font-style:italic;margin-bottom:5px}
+.desc-row{font-size:13px;color:var(--t3);line-height:1.45}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.tile{background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:13px 12px}
+.tile.w{grid-column:1/-1}
+.t-lbl{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1.6px;margin-bottom:5px}
+.t-val{font-size:13px;color:var(--t1);line-height:1.45}
+
+.fact{background:linear-gradient(135deg,var(--elev),var(--card));
+  border:1px solid rgba(200,151,42,.20);border-radius:18px;padding:18px}
+.f-lbl{font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px}
+.f-txt{font-size:15px;color:var(--t1);line-height:1.65;font-style:italic}
+.f-link{display:block;margin-top:12px;font-size:13px;color:var(--gold);text-decoration:none;font-style:normal}
+
+.btn{width:100%;background:var(--gold);border:none;border-radius:13px;padding:14px;
+  color:var(--bg);font-family:'Playfair Display',serif;font-size:15px;font-weight:700;
+  letter-spacing:.3px;cursor:pointer;transition:all .18s;touch-action:manipulation}
+.btn:active{transform:scale(.96);opacity:.86}
+.btn.ghost{background:transparent;border:1.5px solid var(--gold);color:var(--gold)}
+
+/* ── ERROR ── */
+#ER{justify-content:center;padding:24px}
+.err-box{background:var(--card);border:1px solid rgba(190,55,45,.28);
+  border-radius:22px;padding:28px 22px;text-align:center;max-width:360px;width:100%}
+.err-ico{font-size:48px;margin-bottom:14px}
+.err-ttl{font-family:'Playfair Display',serif;font-size:22px;margin-bottom:8px}
+.err-msg{font-size:13px;color:var(--t2);margin-bottom:22px;line-height:1.65;
+  word-break:break-word;text-align:left}
+.err-alt{display:block;margin-top:12px;font-size:12px;color:var(--t3);text-decoration:none}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+::-webkit-scrollbar{width:0}
+</style>
+</head>
+<body>
+
+<!-- ═══ LOAD ═══════════════════════════════════ -->
+<div id="LD" class="scr">
+  <div class="ld-bird">🦉</div>
+  <div class="ld-logo">Aviara</div>
+  <div class="ld-tag">Free AI Bird Song Identifier</div>
+  <div class="ld-card">
+    <div class="ld-step" id="st1"><div class="dot"></div><span>Loading species list…</span></div>
+    <div class="ld-step" id="st2"><div class="dot"></div><span id="st2txt">Downloading BirdNET model (one-time ~52 MB)…</span></div>
+    <div class="ld-step" id="st3"><div class="dot"></div><span>Starting AI engine…</span></div>
+    <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+    <div class="ld-note">
+      BirdNET downloads <strong>once</strong> and is saved on your device.
+      After that it works completely <strong>offline</strong> — no internet, no account, no cost, ever.
+    </div>
+  </div>
+</div>
+
+<!-- ═══ LISTEN ══════════════════════════════════ -->
+<div id="LI" class="scr off">
+  <div class="topbar">
+    <div class="toplogo">🪶 Aviara</div>
+    <div class="icobtn" onclick="showAbout()">ℹ️</div>
+  </div>
+  <div class="spec-wrap">
+    <canvas id="specCanvas"></canvas>
+    <div class="spec-lbl">Live Spectrogram · 400–10 000 Hz</div>
+    <div class="freq-axis"><span>10k</span><span>5k</span><span>2k</span><span>400</span></div>
+  </div>
+  <div class="wave-wrap"><canvas id="waveCanvas"></canvas></div>
+  <div class="ctrls">
+    <div id="statusLbl">Tap Start to identify birds</div>
+    <button id="listenBtn" onclick="toggleListen()">🎙 Start</button>
+  </div>
+  <div class="feed-bar">
+    <div class="feed-ttl">🐦 This Session</div>
+    <div class="feed-clr" onclick="clearFeed()">Clear</div>
+  </div>
+  <div id="feed">
+    <div class="empty" id="emptyState">
+      Press <strong>Start</strong>, then hold your phone near a bird sound.<br>
+      Tap any card for full field notes.
+    </div>
+  </div>
+  <!-- shared tab bar -->
+  <div class="tab-bar">
+    <div class="tab-btn act" id="tab-li" onclick="goTab('LI')">
+      <span class="ti">🎙</span><span class="tl">Listen</span>
+    </div>
+    <div class="tab-btn" id="tab-st" onclick="goTab('ST')">
+      <span class="ti">📊</span><span class="tl">Stats</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ STATS ═══════════════════════════════════ -->
+<div id="ST" class="scr off">
+  <div class="st-header">
+    <div class="st-title">My Birds</div>
+    <div class="export-btn" onclick="exportCSV()">⬇︎ Export CSV</div>
+  </div>
+
+  <div class="st-body" id="stBody">
+    <!-- rendered by JS -->
+  </div>
+
+  <!-- shared tab bar (duplicate so it shows on this screen too) -->
+  <div class="tab-bar">
+    <div class="tab-btn" id="tab-li2" onclick="goTab('LI')">
+      <span class="ti">🎙</span><span class="tl">Listen</span>
+    </div>
+    <div class="tab-btn act" id="tab-st2" onclick="goTab('ST')">
+      <span class="ti">📊</span><span class="tl">Stats</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ INFO ════════════════════════════════════ -->
+<div id="IN" class="scr off">
+  <div class="info-hdr">
+    <div class="icobtn" id="infoBack" onclick="show('LI')">←</div>
+    <div class="info-hdr-lbl">Field Notes</div>
+  </div>
+  <div id="infoBody"></div>
+</div>
+
+<!-- ═══ ERROR ═══════════════════════════════════ -->
+<div id="ER" class="scr off">
+  <div class="err-box">
+    <div class="err-ico">⚠️</div>
+    <div class="err-ttl" id="errTtl">Setup failed</div>
+    <div class="err-msg"  id="errMsg">Something went wrong.</div>
+    <button class="btn" onclick="location.reload()">↺ Try Again</button>
+    <a class="err-alt" href="https://birdnet-team.github.io/real-time-pwa/" target="_blank">
+      Or use the official BirdNET Live app instead →
+    </a>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   URLS — verified correct May 2026
+   justinchuby/BirdNET-onnx on HuggingFace
+═══════════════════════════════════════════════ */
+const MODEL_URL  = 'https://huggingface.co/justinchuby/BirdNET-onnx/resolve/main/model.onnx';
+const LABELS_URL = 'https://huggingface.co/justinchuby/BirdNET-onnx/resolve/main/BirdNET_GLOBAL_6K_V2.4_Labels.txt';
+const CACHE_KEY  = 'aviara-v2';
+const HIST_KEY   = 'aviara_history';
+const TARGET_SR  = 48000;
+const CHUNK_SEC  = 3.0;
+const THRESHOLD  = 0.12;
+const MAX_HIST   = 1000; // max stored detections
+
+/* ═══════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════ */
+let ortSession = null, labels = [];
+let audioCtx = null, analyser = null, scriptProc = null, mediaStream = null;
+let listening = false, inferring = false, nativeSR = 48000;
+let audioBuf = [], bufSecs = 0;
+let specCtx = null, waveCtx = null, specX = 0, specRAF = null;
+let infoFromScreen = 'LI'; // so Back button returns to right screen
+
+/* ═══════════════════════════════════════════════
+   BOOT
+═══════════════════════════════════════════════ */
+window.addEventListener('load', async () => {
+  try {
+    ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/';
+    ort.env.wasm.numThreads = 1;
+  } catch(e) {}
+  try {
+    setStep(1); setProg(5);
+    labels = await loadLabels();
+    setStep(1,true);
+
+    setStep(2); setProg(10);
+    const buf = await downloadModel();
+    setStep(2,true);
+
+    setStep(3); setProg(88);
+    ortSession = await ort.InferenceSession.create(buf,{
+      executionProviders:['wasm'], graphOptimizationLevel:'all'
+    });
+    setStep(3,true); setProg(100);
+
+    await sleep(300);
+    setupCanvases();
+    show('LI');
+  } catch(e) {
+    console.error(e);
+    showErr('Setup failed', e.message || String(e));
+  }
+});
+
+/* ═══════════════════════════════════════════════
+   LABELS
+═══════════════════════════════════════════════ */
+async function loadLabels() {
+  let text = await cacheGet(LABELS_URL,'text');
+  if (!text) {
+    let r;
+    try { r = await fetch(LABELS_URL); }
+    catch(e) { throw new Error('No internet. Connect and reload to load for the first time.'); }
+    if (!r.ok) throw new Error(`Labels not found (HTTP ${r.status})`);
+    text = await r.text();
+    cachePut(LABELS_URL, text, 'text/plain');
+  }
+  return text.trim().split('\n').map(line => {
+    line = line.trim();
+    const i = line.indexOf('_');
+    if (i < 0) return {sci:line, com:line};
+    return {sci:line.slice(0,i), com:line.slice(i+1)};
+  }).filter(l => l.sci.length > 0);
+}
+
+/* ═══════════════════════════════════════════════
+   MODEL
+═══════════════════════════════════════════════ */
+async function downloadModel() {
+  const cached = await cacheGet(MODEL_URL,'buffer');
+  if (cached) {
+    setProg(85);
+    document.getElementById('st2txt').textContent = 'Loading cached model…';
+    return cached;
+  }
+  let res;
+  try { res = await fetch(MODEL_URL); }
+  catch(e) { throw new Error('Cannot reach HuggingFace. Check internet connection.'); }
+  if (!res.ok) throw new Error(`Model download failed (HTTP ${res.status})`);
+
+  const total = parseInt(res.headers.get('Content-Length')||'0');
+  const reader = res.body.getReader();
+  const parts = []; let got = 0;
+  while (true) {
+    const {done,value} = await reader.read();
+    if (done) break;
+    parts.push(value); got += value.length;
+    if (total > 0) {
+      setProg(10 + Math.round(got/total*72));
+      document.getElementById('st2txt').textContent =
+        `Downloading BirdNET… ${(got/1e6).toFixed(1)} / ${(total/1e6).toFixed(1)} MB`;
+    }
+  }
+  const all = new Uint8Array(got); let off = 0;
+  for (const p of parts) { all.set(p,off); off+=p.length; }
+  cachePut(MODEL_URL, all.buffer, 'application/octet-stream');
+  return all.buffer;
+}
+
+/* ═══════════════════════════════════════════════
+   AUDIO
+═══════════════════════════════════════════════ */
+async function toggleListen() { listening ? stopListen() : await startListen(); }
+
+async function startListen() {
+  if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}
+    });
+  } catch(e) {
+    if (e.name==='NotAllowedError')
+      alert('Microphone permission required.\n\niPhone: Settings → Safari → Microphone → Allow.\nThen reload.');
+    else alert('Cannot access microphone: '+e.message);
+    return;
+  }
+  nativeSR = audioCtx.sampleRate;
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048; analyser.smoothingTimeConstant = 0.22;
+  scriptProc = audioCtx.createScriptProcessor(4096,1,1);
+  const src = audioCtx.createMediaStreamSource(mediaStream);
+  src.connect(analyser); src.connect(scriptProc);
+  scriptProc.connect(audioCtx.destination);
+  audioBuf=[]; bufSecs=0;
+  scriptProc.onaudioprocess = onAudio;
+  listening = true;
+  setListenUI(true); clearSpec(); startSpecLoop();
+}
+
+function stopListen() {
+  listening = false;
+  if (scriptProc) { scriptProc.disconnect(); scriptProc=null; }
+  if (mediaStream) { mediaStream.getTracks().forEach(t=>t.stop()); mediaStream=null; }
+  stopSpecLoop(); idleWave(); setListenUI(false);
+}
+
+function onAudio(e) {
+  if (!listening) return;
+  const chunk = new Float32Array(e.inputBuffer.getChannelData(0));
+  audioBuf.push(chunk); bufSecs += chunk.length/nativeSR;
+  if (bufSecs >= CHUNK_SEC && !inferring) {
+    const len = audioBuf.reduce((s,a)=>s+a.length,0);
+    const flat = new Float32Array(len); let off=0;
+    for (const a of audioBuf) { flat.set(a,off); off+=a.length; }
+    audioBuf=[]; bufSecs=0;
+    runInference(flat);
+  }
+}
+
+function resample(data,from,to) {
+  if (from===to) return data;
+  const ratio=from/to, out=new Float32Array(Math.round(data.length/ratio));
+  for (let i=0;i<out.length;i++) {
+    const p=i*ratio, lo=p|0;
+    out[i]=data[lo]+(p-lo)*((data[lo+1]||0)-data[lo]);
+  }
+  return out;
+}
+
+/* ═══════════════════════════════════════════════
+   INFERENCE
+═══════════════════════════════════════════════ */
+async function runInference(raw) {
+  if (!ortSession||inferring) return;
+  inferring = true;
+  try {
+    let audio = nativeSR===TARGET_SR ? raw : resample(raw,nativeSR,TARGET_SR);
+    const N = TARGET_SR*CHUNK_SEC; // 144000
+    if (audio.length<N){const p=new Float32Array(N);p.set(audio);audio=p;}
+    else if (audio.length>N) audio=audio.slice(0,N);
+    const tensor = new ort.Tensor('float32',audio,[1,N]);
+    const feeds = {}; feeds[ortSession.inputNames[0]]=tensor;
+    const out = await ortSession.run(feeds);
+    const scores = out[ortSession.outputNames[0]].data;
+    let bestIdx=-1, bestVal=THRESHOLD;
+    for (let i=0;i<scores.length&&i<labels.length;i++)
+      if (scores[i]>bestVal){bestVal=scores[i];bestIdx=i;}
+    if (bestIdx>=0) addDetection(labels[bestIdx],bestVal);
+  } catch(e) { console.warn('Inference:',e.message||e); }
+  finally { inferring=false; }
+}
+
+/* ═══════════════════════════════════════════════
+   HISTORY  (persisted in localStorage)
+═══════════════════════════════════════════════ */
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(HIST_KEY)||'[]'); }
+  catch(e) { return []; }
+}
+function saveHistory(h) {
+  try { localStorage.setItem(HIST_KEY, JSON.stringify(h.slice(0,MAX_HIST))); } catch(e){}
+}
+function pushHistory(lbl, score) {
+  const h = loadHistory();
+  h.unshift({t:Date.now(), com:lbl.com, sci:lbl.sci, s:Math.round(score*100)});
+  saveHistory(h);
+}
+
+/* ═══════════════════════════════════════════════
+   DETECTION CARDS  (live feed)
+═══════════════════════════════════════════════ */
+function addDetection(lbl, score) {
+  // Save to persistent history
+  pushHistory(lbl, score);
+
+  const feed = document.getElementById('feed');
+  document.getElementById('emptyState')?.remove();
+
+  const pct   = Math.round(score*100);
+  const cls   = pct>=70?'hi':pct>=35?'md':'lo';
+  const color = pct>=70?'var(--gold2)':pct>=35?'var(--sage2)':'var(--t2)';
+  const time  = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+  const card = document.createElement('div');
+  card.className = 'det';
+  card.innerHTML =
+    `<div class="det-l">
+       <div class="det-name">${esc(lbl.com)}</div>
+       <div class="det-sci">${esc(lbl.sci)}</div>
+       <div class="det-bar"><div class="det-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+     </div>
+     <div class="det-r">
+       <div class="det-pct ${cls}">${pct}%</div>
+       <div class="det-t">${time}</div>
+     </div>`;
+  card.addEventListener('click',()=>{ infoFromScreen='LI'; openInfo(lbl); });
+  feed.insertBefore(card,feed.firstChild);
+  while(feed.children.length>60) feed.removeChild(feed.lastChild);
+}
+
+function clearFeed() {
+  document.getElementById('feed').innerHTML =
+    `<div class="empty" id="emptyState">
+       Press <strong>Start</strong>, then hold your phone near a bird sound.<br>
+       Tap any card for full field notes.
+     </div>`;
+}
+
+/* ═══════════════════════════════════════════════
+   STATS SCREEN
+═══════════════════════════════════════════════ */
+function renderStats() {
+  const history = loadHistory();
+  const body = document.getElementById('stBody');
+
+  if (history.length === 0) {
+    body.innerHTML =
+      `<div class="empty" style="padding:60px 20px">
+         No detections yet.<br>Go to <strong>Listen</strong> to start identifying birds.
+       </div>`;
+    return;
+  }
+
+  // Aggregate by species
+  const bySpecies = {};
+  for (const d of history) {
+    if (!bySpecies[d.sci]) bySpecies[d.sci] = {com:d.com,sci:d.sci,count:0,last:0,best:0};
+    bySpecies[d.sci].count++;
+    if (d.t > bySpecies[d.sci].last) bySpecies[d.sci].last = d.t;
+    if (d.s > bySpecies[d.sci].best) bySpecies[d.sci].best = d.s;
+  }
+  const ranked = Object.values(bySpecies).sort((a,b)=>b.count-a.count);
+  const topCount = ranked[0].count;
+
+  // Summary pills
+  const todayCount = history.filter(d => {
+    const ds = new Date(d.t), now = new Date();
+    return ds.toDateString() === now.toDateString();
+  }).length;
+
+  let html =
+    `<div class="summary-row">
+       <div class="sum-pill"><div class="sum-n">${history.length}</div><div class="sum-l">Total</div></div>
+       <div class="sum-pill"><div class="sum-n">${ranked.length}</div><div class="sum-l">Species</div></div>
+       <div class="sum-pill"><div class="sum-n">${todayCount}</div><div class="sum-l">Today</div></div>
+     </div>`;
+
+  // Frequent visitors
+  const medals = ['🥇','🥈','🥉'];
+  const rankCls = ['rank-1','rank-2','rank-3'];
+  html += `<div class="sec-head">🏆 Frequent Visitors</div>`;
+  const topN = ranked.slice(0,10);
+  topN.forEach((v,i) => {
+    const pct = Math.round((v.count/topCount)*100);
+    const medal = i < 3 ? medals[i] : String(i+1);
+    const rCls  = i < 3 ? rankCls[i] : 'rank-rest';
+    const lastDate = new Date(v.last);
+    const lastStr  = lastDate.toLocaleDateString([],{month:'short',day:'numeric'})
+                   + ' ' + lastDate.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    html +=
+      `<div class="vis-card" onclick='openInfoByName(${JSON.stringify(v)})'>
+         <div class="vis-rank ${rCls}">${medal}</div>
+         <div class="vis-info">
+           <div class="vis-name">${esc(v.com)}</div>
+           <div class="vis-sci">${esc(v.sci)}</div>
+           <div class="vis-bar-wrap"><div class="vis-bar-fill" style="width:${pct}%"></div></div>
+         </div>
+         <div class="vis-count">
+           <div class="vis-n">${v.count}</div>
+           <div class="vis-seen">${v.count===1?'time':'times'}</div>
+         </div>
+       </div>`;
+  });
+
+  // Recent detections (last 60)
+  html += `<div class="sec-head">🕐 Detection History</div>`;
+  html += `<div class="hist-wrap">`;
+  history.slice(0,60).forEach(d => {
+    const dt = new Date(d.t);
+    const dateStr = dt.toLocaleDateString([],{month:'short',day:'numeric'});
+    const timeStr = dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const cls = d.s>=70?'hi':d.s>=35?'md':'lo';
+    html +=
+      `<div class="hist-item" onclick='openInfoByName(${JSON.stringify({com:d.com,sci:d.sci})})'>
+         <div>
+           <div class="hist-name">${esc(d.com)}</div>
+           <div class="hist-sci">${esc(d.sci)}</div>
+         </div>
+         <div class="hist-right">
+           <div class="hist-pct ${cls}">${d.s}%</div>
+           <div class="hist-time">${dateStr} · ${timeStr}</div>
+         </div>
+       </div>`;
+  });
+  html += `</div>`;
+
+  // Clear button
+  html +=
+    `<button class="clr-hist" onclick="clearHistory()">
+       🗑 Clear All Detection History
+     </button>`;
+
+  body.innerHTML = html;
+}
+
+function clearHistory() {
+  if (!confirm('Delete all detection history? This cannot be undone.')) return;
+  localStorage.removeItem(HIST_KEY);
+  renderStats();
+}
+
+/* ═══════════════════════════════════════════════
+   EXPORT CSV
+═══════════════════════════════════════════════ */
+function exportCSV() {
+  const history = loadHistory();
+  if (history.length === 0) { alert('No detections to export yet.'); return; }
+
+  const rows = [['Date','Time','Common Name','Scientific Name','Confidence %']];
+  for (const d of history) {
+    const dt = new Date(d.t);
+    rows.push([
+      dt.toLocaleDateString(),
+      dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+      d.com, d.sci, d.s
+    ]);
+  }
+  const csv  = rows.map(r => r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `aviara-birds-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+/* ═══════════════════════════════════════════════
+   BIRD INFO
+═══════════════════════════════════════════════ */
+function openInfoByName(lbl) {
+  infoFromScreen = 'ST';
+  openInfo(lbl);
+}
+
+async function openInfo(lbl) {
+  document.getElementById('infoBack').onclick = () => show(infoFromScreen);
+  show('IN');
+  document.getElementById('IN').scrollTop = 0;
+  document.getElementById('infoBody').innerHTML =
+    `<div style="text-align:center;padding:60px 20px">
+       <div style="font-size:44px;display:inline-block;animation:spin 1.5s linear infinite">🪶</div>
+       <div style="margin-top:14px;color:var(--t2);font-style:italic;font-size:15px">Fetching field notes…</div>
+     </div>`;
+
+  const [iR,wR] = await Promise.allSettled([
+    fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(lbl.sci)}&rank=species&per_page=1`)
+      .then(r=>r.json()).catch(()=>null),
+    fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(lbl.com)}`)
+      .then(r=>r.ok?r.json():null).catch(()=>null)
+  ]);
+  renderInfo(lbl, iR.value?.results?.[0]||null, wR.value||null);
+}
+
+const IUCN = {
+  LC:{txt:'Least Concern',cls:'lc'}, NT:{txt:'Near Threatened',cls:'nt'},
+  VU:{txt:'Vulnerable',cls:'vu'},    EN:{txt:'Endangered',cls:'en'},
+  CR:{txt:'Critically Endangered',cls:'cr'}, EW:{txt:'Extinct in Wild',cls:'en'},
+  EX:{txt:'Extinct',cls:'cr'},       DD:{txt:'Data Deficient',cls:'dd'},
+};
+
+function renderInfo(lbl,inat,wiki) {
+  const extract = wiki?.extract||'';
+  const photo = inat?.default_photo?.medium_url
+    || (wiki?.thumbnail?.source?.replace(/\/\d+px-/,'/640px-'))
+    || null;
+  const statuses = inat?.conservation_statuses||[];
+  const gStatus  = statuses.find(s=>!s.place_id)||statuses[0];
+  const code     = (gStatus?.status||'').toUpperCase().trim();
+  const iucn     = IUCN[code]||null;
+
+  const lifespan  = parseLifespan(extract);
+  const migration = parseMigration(extract);
+  const diet      = parseDiet(extract);
+  const habitat   = parseHabitat(extract);
+  const wingspan  = parseWingspan(extract);
+
+  let tiles='';
+  if (iucn)      tiles+=mkTile('w','🛡️ Conservation',
+    `<span class="cs-badge ${iucn.cls}">${code}</span>&nbsp; ${iucn.txt}`);
+  if (migration) tiles+=mkTile('',`${migration.e} Migration`,migration.txt);
+  if (lifespan)  tiles+=mkTile('','⏳ Lifespan',lifespan);
+  if (diet)      tiles+=mkTile('','🍃 Diet',diet);
+  if (habitat)   tiles+=mkTile('','🌿 Habitat',habitat);
+  if (wingspan)  tiles+=mkTile('','📐 Wingspan',wingspan);
+
+  const about = extract.length>300
+    ? extract.slice(0,300).replace(/\s\S+$/,'')+'…' : extract;
+  const wikiUrl = wiki?.content_urls?.desktop?.page||null;
+
+  // Count how many times detected
+  const hist    = loadHistory();
+  const myCount = hist.filter(d=>d.sci===lbl.sci).length;
+  const myBest  = hist.filter(d=>d.sci===lbl.sci).reduce((m,d)=>Math.max(m,d.s),0);
+
+  document.getElementById('infoBody').innerHTML =
+    `<div class="photo-wrap">
+       ${photo
+         ? `<img src="${esc(photo)}" alt="${esc(lbl.com)}"
+              onerror="this.parentElement.innerHTML='<div class=\\'photo-ph\\'>🦜</div>'">`
+         : `<div class="photo-ph">🦜</div>`}
+       ${iucn?`<div class="cs-badge abs ${iucn.cls}">${iucn.txt}</div>`:''}
+     </div>
+
+     <div class="name-card">
+       <div class="c-name">${esc(lbl.com)}</div>
+       <div class="s-name">${esc(lbl.sci)}</div>
+       ${wiki?.description?`<div class="desc-row">${esc(wiki.description)}</div>`:''}
+     </div>
+
+     ${myCount>0?`
+     <div class="tile w" style="display:flex;justify-content:space-between;align-items:center">
+       <div>
+         <div class="t-lbl">🔭 Your Sightings</div>
+         <div class="t-val">Detected <strong>${myCount}</strong> time${myCount===1?'':'s'}</div>
+       </div>
+       <div style="text-align:right">
+         <div class="t-lbl">Best Confidence</div>
+         <div class="t-val" style="color:var(--gold2)">${myBest}%</div>
+       </div>
+     </div>`:''}
+
+     ${tiles?`<div class="grid">${tiles}</div>`:''}
+
+     ${about?`<div class="fact">
+       <div class="f-lbl">📖 About this bird</div>
+       <div class="f-txt">${esc(about)}</div>
+       ${wikiUrl?`<a href="${esc(wikiUrl)}" target="_blank" class="f-link">Read full article on Wikipedia →</a>`:''}
+     </div>`:''}
+
+     <button class="btn ghost" style="margin-top:4px"
+       onclick="show('${infoFromScreen}')">← Back</button>`;
+}
+
+function mkTile(w,lbl,val){
+  return `<div class="tile${w?' '+w:''}"><div class="t-lbl">${lbl}</div><div class="t-val">${val}</div></div>`;
+}
+
+function parseLifespan(t){
+  const ps=[/lives?(?:\s+for)?\s+(?:up to\s+)?(\d+(?:[–\-]\d+)?)\s+years?/i,
+    /lifespan(?:\s+of)?\s+(?:up to\s+)?(\d+(?:[–\-]\d+)?)\s+years?/i,
+    /(?:can|may)\s+live\s+(?:up to\s+)?(\d+)\s+years?/i,
+    /(?:up to\s+)?(\d+)\s+years?\s+(?:in the wild|in captivity)/i];
+  for(const p of ps){const m=t.match(p);if(m)return m[1]+' years';}
+  return null;
+}
+function parseMigration(t){
+  if(/long[- ]distance\s+migrat/i.test(t)) return{e:'🌍',txt:'Long-distance migrant'};
+  if(/partial\s+migrat/i.test(t))           return{e:'↕️',txt:'Partial migrant'};
+  if(/migrat(?:ory|es|ion)/i.test(t))        return{e:'✈️',txt:'Migratory'};
+  if(/winter\s+visitor|wintering/i.test(t))  return{e:'❄️',txt:'Winter visitor'};
+  if(/year[- ]round|sedentary|resident/i.test(t)) return{e:'🏡',txt:'Year-round resident'};
+  return null;
+}
+function parseDiet(t){
+  const m=t.match(/(?:feeds?\s+(?:mainly\s+)?on|eats?|diet\s+(?:consists?\s+of)?)\s+([^.;,]{6,65})/i);
+  return m?uc(m[1].trim().replace(/\.$/,'')):null;
+}
+function parseHabitat(t){
+  const m=t.match(/(?:found|lives?|inhabits?|nests?)\s+(?:in|among|on|near|across)\s+([^.;,]{6,70})/i);
+  return m?uc(m[1].trim().replace(/\.$/,'')):null;
+}
+function parseWingspan(t){
+  const m=t.match(/wingspan\s+of\s+(\d+(?:[–\-]\d+)?\s*cm)/i)
+          ||t.match(/(\d+(?:[–\-]\d+)?\s*cm)\s+wingspan/i);
+  return m?m[1]:null;
+}
+
+/* ═══════════════════════════════════════════════
+   SPECTROGRAM + WAVEFORM
+═══════════════════════════════════════════════ */
+function setupCanvases(){
+  const sc=document.getElementById('specCanvas');
+  const wc=document.getElementById('waveCanvas');
+  sc.width=sc.offsetWidth||390; sc.height=110;
+  wc.width=wc.offsetWidth||390; wc.height=42;
+  specCtx=sc.getContext('2d'); waveCtx=wc.getContext('2d');
+  clearSpec(); idleWave();
+}
+function clearSpec(){
+  if(!specCtx)return;
+  specCtx.fillStyle='#020702';
+  specCtx.fillRect(0,0,specCtx.canvas.width,specCtx.canvas.height);
+  specX=0;
+}
+function startSpecLoop(){
+  cancelAnimationFrame(specRaf);
+  (function frame(){
+    if(!listening||!analyser)return;
+    specRaf=requestAnimationFrame(frame);
+    const d=new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(d);
+    drawSpecCol(d); drawWave(d);
+  })();
+}
+function stopSpecLoop(){ cancelAnimationFrame(specRaf); specRaf=null; }
+function drawSpecCol(d){
+  const W=specCtx.canvas.width,H=specCtx.canvas.height;
+  const minB=19,maxB=Math.min(460,d.length-1),range=maxB-minB;
+  if(specX>=W){specCtx.putImageData(specCtx.getImageData(1,0,W-1,H),0,0);specX=W-1;}
+  for(let row=0;row<H;row++){
+    const v=d[minB+Math.floor(((H-1-row)/H)*range)]/255;
+    let r,g,b;
+    if(v<.20){const t=v/.20;r=Math.round(t*68);g=0;b=Math.round(t*84);}
+    else if(v<.40){const t=(v-.20)/.20;r=Math.round(68+t*4);g=Math.round(t*57);b=Math.round(84+t*85);}
+    else if(v<.60){const t=(v-.40)/.20;r=Math.round(72-t*34);g=Math.round(57+t*107);b=Math.round(169-t*30);}
+    else if(v<.80){const t=(v-.60)/.20;r=Math.round(38+t*157);g=Math.round(164+t*67);b=Math.round(139-t*96);}
+    else{const t=(v-.80)/.20;r=Math.round(195+t*58);g=Math.round(231+t*21);b=Math.round(43-t*43);}
+    specCtx.fillStyle=`rgb(${r},${g},${b})`;
+    specCtx.fillRect(specX,row,1,1);
+  }
+  specX++;
+}
+function drawWave(d){
+  if(!waveCtx)return;
+  const W=waveCtx.canvas.width,H=waveCtx.canvas.height;
+  waveCtx.clearRect(0,0,W,H);
+  const n=48,bw=Math.max(1,Math.floor(W/n)-1);
+  for(let i=0;i<n;i++){
+    const v=d[Math.floor((i/n)*Math.min(300,d.length))]/255;
+    const bh=Math.max(3,v*H*.9);
+    waveCtx.fillStyle=`rgba(200,151,42,${.25+v*.75})`;
+    waveCtx.fillRect(i*(bw+1),(H-bh)/2,bw,bh);
+  }
+}
+function idleWave(){
+  if(!waveCtx)return;
+  const W=waveCtx.canvas.width,H=waveCtx.canvas.height;
+  waveCtx.clearRect(0,0,W,H);
+  const n=48,bw=Math.max(1,Math.floor(W/n)-1);
+  for(let i=0;i<n;i++){
+    const bh=(0.05+Math.abs(Math.sin(i*.42))*.03)*H;
+    waveCtx.fillStyle='rgba(94,82,64,0.32)';
+    waveCtx.fillRect(i*(bw+1),(H-bh)/2,bw,bh);
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════════════ */
+function show(id){
+  document.querySelectorAll('.scr').forEach(s=>s.classList.add('off'));
+  document.getElementById(id).classList.remove('off');
+}
+function goTab(id){
+  if(id==='ST') renderStats();
+  show(id);
+  // sync both tab bars
+  document.querySelectorAll('.tab-btn').forEach(b=>{
+    b.classList.remove('act');
+    if((id==='LI'&&(b.id==='tab-li'||b.id==='tab-li2'))
+     ||(id==='ST'&&(b.id==='tab-st'||b.id==='tab-st2')))
+      b.classList.add('act');
+  });
+}
+function setListenUI(on){
+  const btn=document.getElementById('listenBtn');
+  const lbl=document.getElementById('statusLbl');
+  btn.textContent=on?'■ Stop':'🎙 Start';
+  btn.classList.toggle('stop',on);
+  lbl.textContent=on?'● Listening for birds…':'Tap Start to identify birds';
+  lbl.classList.toggle('on',on);
+}
+function setStep(n,done){
+  ['st1','st2','st3'].forEach((id,i)=>{
+    const el=document.getElementById(id);
+    el.classList.remove('on','ok');
+    if(done&&i+1===n){el.classList.add('ok');return;}
+    if(!done&&i+1===n) el.classList.add('on');
+    if(i+1<n) el.classList.add('ok');
+  });
+}
+function setProg(pct){ document.getElementById('progFill').style.width=Math.min(100,pct)+'%'; }
+function showErr(ttl,msg){
+  document.getElementById('errTtl').textContent=ttl;
+  document.getElementById('errMsg').textContent=msg;
+  show('ER');
+}
+function showAbout(){
+  alert('Aviara — Free AI Bird Song Identifier\n\n'
+    +'• BirdNET by Cornell Lab & TU Chemnitz (6 500+ species)\n'
+    +'• Runs entirely on your device — nothing is uploaded\n'
+    +'• Detection history saved on your device\n'
+    +'• Export detections as CSV from the Stats tab\n'
+    +'• Bird info from iNaturalist & Wikipedia (free)');
+}
+
+/* ═══════════════════════════════════════════════
+   CACHE
+═══════════════════════════════════════════════ */
+async function cacheGet(url,type){
+  try{
+    const c=await caches.open(CACHE_KEY);
+    const r=await c.match(url); if(!r)return null;
+    return type==='buffer'?r.arrayBuffer():r.text();
+  }catch(e){return null;}
+}
+async function cachePut(url,data,mime){
+  try{
+    const c=await caches.open(CACHE_KEY);
+    const body=typeof data==='string'?data:new Uint8Array(data);
+    await c.put(url,new Response(body,{headers:{'Content-Type':mime}}));
+  }catch(e){}
+}
+
+/* ═══════════════════════════════════════════════
+   UTILS
+═══════════════════════════════════════════════ */
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const uc=s=>s.charAt(0).toUpperCase()+s.slice(1);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+</script>
+</body>
+</html>
