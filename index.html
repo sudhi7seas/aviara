@@ -15,7 +15,7 @@
   --bg:#060C06;--srf:#0B160B;--card:#0F1A10;--elev:#152216;
   --gold:#C8972A;--gold2:#E8B84B;--sage:#3D6B4A;--sage2:#5A9B6D;
   --t1:#F0E6C8;--t2:#A89B7A;--t3:#5E5240;--bdr:rgba(200,151,42,0.16);
-  --tab-h:56px;
+  --tab:54px;
 }
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;height:-webkit-fill-available}
@@ -26,25 +26,30 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 
 /* ── screens ── */
 .scr{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;
-  transition:opacity .3s,transform .3s}
-.scr.off{opacity:0;pointer-events:none;transform:translateY(14px)}
+  transition:opacity .28s,transform .28s}
+.scr.off{opacity:0;pointer-events:none;transform:translateY(12px)}
 
-/* ── tab bar (shared by LI + ST screens) ── */
-.tab-bar{
-  position:fixed;bottom:0;left:0;right:0;z-index:30;
-  height:calc(var(--tab-h) + env(safe-area-inset-bottom));
-  background:var(--card);border-top:1px solid var(--bdr);
-  display:flex;align-items:stretch;
-}
-.tab-btn{flex:1;display:flex;flex-direction:column;align-items:center; 
-  justify-content:center;gap:3px;cursor:pointer;touch-action:manipulation;
+/* ── tab bar ── */
+.tbar{position:fixed;bottom:0;left:0;right:0;z-index:30;
+  height:calc(var(--tab) + env(safe-area-inset-bottom));
+  background:var(--card);border-top:1px solid var(--bdr);display:flex;align-items:stretch}
+.tb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;cursor:pointer;touch-action:manipulation;
   padding-bottom:env(safe-area-inset-bottom)}
-.tab-btn span.ti{font-size:20px;line-height:1}
-.tab-btn span.tl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px}
-.tab-btn.act span.tl{color:var(--gold)}
-.tab-btn.act span.ti{filter:drop-shadow(0 0 6px rgba(200,151,42,.5))}
+.tb .ti{font-size:19px;line-height:1;transition:filter .2s}
+.tb .tl{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;transition:color .2s}
+.tb.act .tl{color:var(--gold)}
+.tb.act .ti{filter:drop-shadow(0 0 5px rgba(200,151,42,.6))}
 
-/* ── LOAD ── */
+/* ── shared topbar ── */
+.topbar{display:flex;justify-content:space-between;align-items:center;width:100%;
+  padding:10px 16px;padding-top:max(10px,env(safe-area-inset-top) + 4px);flex-shrink:0}
+.toplogo{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--gold)}
+.icobtn{background:var(--elev);border:1px solid var(--bdr);border-radius:10px;
+  width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;font-size:15px;touch-action:manipulation;flex-shrink:0}
+
+/* ══ LOAD ══════════════════════════════════════ */
 #LD{justify-content:center;padding:28px 22px}
 .ld-bird{font-size:68px;margin-bottom:18px;
   filter:drop-shadow(0 0 22px rgba(200,151,42,.45));animation:float 2.8s ease-in-out infinite}
@@ -66,128 +71,155 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
   background:linear-gradient(90deg,var(--sage2),var(--gold));width:2%;transition:width .5s ease}
 .ld-note{font-size:11px;color:var(--t3);font-style:italic;line-height:1.55}
 
-/* ── LISTEN ── */
+/* ══ LISTEN ════════════════════════════════════ */
 #LI{padding:0;justify-content:flex-start;
-  padding-bottom:calc(var(--tab-h) + env(safe-area-inset-bottom))}
-.topbar{display:flex;justify-content:space-between;align-items:center;width:100%;
-  padding:10px 16px;padding-top:max(10px,env(safe-area-inset-top) + 4px);flex-shrink:0}
-.toplogo{font-family:'Playfair Display',serif;font-size:21px;font-weight:700;color:var(--gold)}
-.icobtn{background:var(--elev);border:1px solid var(--bdr);border-radius:10px;
-  width:36px;height:36px;display:flex;align-items:center;justify-content:center;
-  cursor:pointer;font-size:15px;touch-action:manipulation}
-
+  padding-bottom:calc(var(--tab) + env(safe-area-inset-bottom))}
 .spec-wrap{width:100%;position:relative;flex-shrink:0;background:var(--srf)}
-#specCanvas{width:100%;height:110px;display:block}
+#specCanvas{width:100%;height:108px;display:block}
 .spec-lbl{position:absolute;top:5px;left:9px;font-size:9px;
   color:rgba(200,151,42,.4);text-transform:uppercase;letter-spacing:1.6px}
 .freq-axis{position:absolute;right:6px;top:0;bottom:0;display:flex;flex-direction:column;
   justify-content:space-between;padding:4px 0;font-size:8px;color:rgba(200,151,42,.28)}
-
-.wave-wrap{width:100%;height:42px;padding:3px 0;flex-shrink:0}
+.wave-wrap{width:100%;height:40px;padding:3px 0;flex-shrink:0}
 #waveCanvas{width:100%;height:100%}
-
-.ctrls{display:flex;align-items:center;gap:14px;padding:8px 16px;flex-shrink:0;width:100%}
-#statusLbl{flex:1;font-size:11px;color:var(--t2);text-transform:uppercase;letter-spacing:1.8px}
+.ctrls{display:flex;align-items:center;gap:12px;padding:7px 16px;flex-shrink:0;width:100%}
+#statusLbl{flex:1;font-size:11px;color:var(--t2);text-transform:uppercase;letter-spacing:1.6px}
 #statusLbl.on{color:var(--gold2);animation:blink 1.2s ease-in-out infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
 #listenBtn{background:var(--gold);color:var(--bg);border:none;border-radius:99px;
-  padding:11px 22px;font-family:'Playfair Display',serif;font-size:15px;font-weight:700;
+  padding:11px 20px;font-family:'Playfair Display',serif;font-size:15px;font-weight:700;
   letter-spacing:.3px;cursor:pointer;white-space:nowrap;touch-action:manipulation;
-  transition:all .18s;box-shadow:0 4px 18px rgba(200,151,42,.28)}
+  transition:all .18s;box-shadow:0 4px 16px rgba(200,151,42,.28)}
 #listenBtn:active{transform:scale(.93);opacity:.82}
 #listenBtn.stop{background:transparent;color:var(--gold);border:1.5px solid var(--gold);box-shadow:none}
-
+.loc-pill{font-size:11px;color:var(--sage2);padding:3px 14px;
+  background:rgba(61,107,74,.15);border-radius:99px;margin:0 16px 4px;
+  flex-shrink:0;align-self:flex-start;display:none}
 .feed-bar{display:flex;justify-content:space-between;align-items:center;
-  width:100%;padding:5px 16px 4px;flex-shrink:0}
+  width:100%;padding:4px 16px 3px;flex-shrink:0}
 .feed-ttl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1.6px}
 .feed-clr{font-size:11px;color:var(--t3);cursor:pointer;touch-action:manipulation;padding:4px}
-
-#feed{flex:1;overflow-y:auto;width:100%;padding:0 12px;
-  -webkit-overflow-scrolling:touch}
-.empty{text-align:center;padding:32px 20px;color:var(--t3);font-style:italic;
+#feed{flex:1;overflow-y:auto;width:100%;padding:0 12px;-webkit-overflow-scrolling:touch}
+.empty{text-align:center;padding:30px 20px;color:var(--t3);font-style:italic;
   font-size:15px;line-height:1.7}
 .det{display:flex;justify-content:space-between;align-items:center;
   background:var(--card);border:1px solid var(--bdr);border-radius:14px;
-  padding:11px 14px;margin-bottom:8px;cursor:pointer;touch-action:manipulation;
+  padding:11px 13px;margin-bottom:8px;cursor:pointer;touch-action:manipulation;
   transition:background .15s;animation:slideIn .28s ease}
 .det:active{background:var(--elev)}
 @keyframes slideIn{from{opacity:0;transform:translateY(-7px)}to{opacity:1;transform:none}}
 .det-l{min-width:0}
-.det-name{font-size:17px;color:var(--t1);line-height:1.2;margin-bottom:2px;
+.det-name{font-size:16px;color:var(--t1);line-height:1.2;margin-bottom:1px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .det-sci{font-size:11px;color:var(--t3);font-style:italic}
-.det-bar{height:3px;border-radius:99px;background:var(--elev);margin-top:6px;overflow:hidden}
+.det-loc{font-size:10px;color:var(--sage2);margin-top:2px}
+.det-bar{height:3px;border-radius:99px;background:var(--elev);margin-top:5px;overflow:hidden}
 .det-bar-fill{height:100%;border-radius:99px}
 .det-r{text-align:right;flex-shrink:0;margin-left:10px}
-.det-pct{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;line-height:1;margin-bottom:2px}
+.det-pct{font-family:'Playfair Display',serif;font-size:19px;font-weight:700;line-height:1;margin-bottom:2px}
 .det-t{font-size:10px;color:var(--t3)}
 .hi{color:var(--gold2)}.md{color:var(--sage2)}.lo{color:var(--t2)}
 
-/* ── STATS ── */
+/* ══ STATS ══════════════════════════════════════ */
 #ST{padding:0;justify-content:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch;
-  padding-bottom:calc(var(--tab-h) + env(safe-area-inset-bottom))}
-
-.st-header{display:flex;justify-content:space-between;align-items:center;
-  width:100%;padding:12px 16px;
-  padding-top:max(12px,env(safe-area-inset-top) + 6px);flex-shrink:0}
-.st-title{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:var(--t1)}
-.export-btn{display:flex;align-items:center;gap:6px;background:var(--elev);
-  border:1px solid var(--bdr);border-radius:10px;padding:8px 12px;
-  cursor:pointer;touch-action:manipulation;font-size:13px;color:var(--gold);
-  font-family:'Crimson Pro',serif;transition:background .15s}
-.export-btn:active{background:var(--card)}
-
+  padding-bottom:calc(var(--tab) + env(safe-area-inset-bottom))}
+.st-header{display:flex;justify-content:space-between;align-items:center;width:100%;
+  padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top) + 6px);flex-shrink:0}
+.st-title{font-family:'Playfair Display',serif;font-size:22px;font-weight:700}
+.exp-btn{display:flex;align-items:center;gap:5px;background:var(--elev);
+  border:1px solid var(--bdr);border-radius:10px;padding:7px 11px;
+  cursor:pointer;touch-action:manipulation;font-size:12px;color:var(--gold);
+  font-family:'Crimson Pro',serif}
+.exp-btn:active{background:var(--card)}
 .st-body{width:100%;padding:0 14px 16px;display:flex;flex-direction:column;
-  gap:16px;max-width:450px;margin:0 auto}
-
-/* summary pills */
-.summary-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  gap:14px;max-width:450px;margin:0 auto}
+.sum-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .sum-pill{background:var(--card);border:1px solid var(--bdr);border-radius:14px;
-  padding:12px 10px;text-align:center}
+  padding:12px 8px;text-align:center}
 .sum-n{font-family:'Playfair Display',serif;font-size:26px;font-weight:700;color:var(--gold)}
-.sum-l{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
-
-/* section heading */
-.sec-head{font-size:10px;color:var(--t3);text-transform:uppercase;
-  letter-spacing:1.6px;margin-bottom:-4px}
-
-/* frequent visitor cards */
-.vis-card{display:flex;align-items:center;gap:12px;
-  background:var(--card);border:1px solid var(--bdr);border-radius:14px;
-  padding:12px 14px;cursor:pointer;touch-action:manipulation;transition:background .15s}
-.vis-card:active{background:var(--elev)}
-.vis-rank{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;
-  width:28px;text-align:center;flex-shrink:0}
-.rank-1{color:#FFD700}.rank-2{color:#C0C0C0}.rank-3{color:#CD7F32}.rank-rest{color:var(--t3)}
-.vis-info{flex:1;min-width:0}
-.vis-name{font-size:16px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.vis-sci{font-size:11px;color:var(--t3);font-style:italic;margin-top:1px}
-.vis-bar-wrap{height:3px;background:var(--elev);border-radius:99px;margin-top:6px;overflow:hidden}
-.vis-bar-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--sage2),var(--gold))}
-.vis-count{text-align:right;flex-shrink:0}
-.vis-n{font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--gold2)}
-.vis-seen{font-size:10px;color:var(--t3);margin-top:2px}
-
-/* history list */
-.hist-item{display:flex;justify-content:space-between;align-items:center;
-  padding:9px 14px;border-bottom:1px solid rgba(200,151,42,.08);
+.sum-l{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+.sec-head{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1.6px;margin-bottom:-4px}
+.vis-card{display:flex;align-items:center;gap:11px;background:var(--card);
+  border:1px solid var(--bdr);border-radius:14px;padding:12px 13px;
   cursor:pointer;touch-action:manipulation;transition:background .15s}
+.vis-card:active{background:var(--elev)}
+.vis-rank{font-family:'Playfair Display',serif;font-size:18px;font-weight:700;
+  width:26px;text-align:center;flex-shrink:0}
+.rk1{color:#FFD700}.rk2{color:#C0C0C0}.rk3{color:#CD7F32}.rk_{color:var(--t3)}
+.vis-info{flex:1;min-width:0}
+.vis-name{font-size:15px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vis-sci{font-size:11px;color:var(--t3);font-style:italic;margin-top:1px}
+.vis-bw{height:3px;background:var(--elev);border-radius:99px;margin-top:5px;overflow:hidden}
+.vis-bf{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--sage2),var(--gold))}
+.vis-ct{text-align:right;flex-shrink:0}
+.vis-n{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:var(--gold2)}
+.vis-s{font-size:10px;color:var(--t3);margin-top:1px}
+.hist-wrap{background:var(--card);border:1px solid var(--bdr);border-radius:14px;overflow:hidden}
+.hist-item{display:flex;justify-content:space-between;align-items:center;
+  padding:9px 13px;border-bottom:1px solid rgba(200,151,42,.07);
+  cursor:pointer;touch-action:manipulation;transition:background .12s}
 .hist-item:last-child{border-bottom:none}
 .hist-item:active{background:var(--elev)}
-.hist-wrap{background:var(--card);border:1px solid var(--bdr);border-radius:14px;overflow:hidden}
 .hist-name{font-size:15px;color:var(--t1)}
 .hist-sci{font-size:10px;color:var(--t3);font-style:italic;margin-top:1px}
-.hist-right{text-align:right;flex-shrink:0;margin-left:10px}
-.hist-pct{font-size:14px;font-weight:600}
+.hist-loc{font-size:10px;color:var(--sage2);margin-top:1px}
+.hist-r{text-align:right;flex-shrink:0;margin-left:10px}
+.hist-pct{font-size:13px;font-weight:600}
 .hist-time{font-size:10px;color:var(--t3);margin-top:1px}
 
-.clr-hist{width:100%;background:transparent;border:1px solid rgba(190,55,45,.3);
-  border-radius:12px;padding:12px;color:rgba(231,76,60,.7);
-  font-family:'Crimson Pro',serif;font-size:14px;cursor:pointer;
-  touch-action:manipulation;transition:all .15s}
-.clr-hist:active{background:rgba(190,55,45,.1)}
+/* ══ MAP ════════════════════════════════════════ */
+#MA{padding:0;justify-content:flex-start;
+  padding-bottom:calc(var(--tab) + env(safe-area-inset-bottom))}
+#mapDiv{flex:1;width:100%;min-height:0;z-index:1}
+.no-loc-msg{flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:10px;color:var(--t3);font-style:italic;
+  font-size:15px;text-align:center;padding:0 40px;line-height:1.6}
+.no-loc-msg span:first-child{font-size:44px}
 
-/* ── INFO ── */
+/* ══ SETTINGS ══════════════════════════════════ */
+#SE{padding:0;justify-content:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding-bottom:calc(var(--tab) + env(safe-area-inset-bottom))}
+.se-body{width:100%;padding:0 14px 20px;display:flex;flex-direction:column;
+  gap:16px;max-width:450px;margin:0 auto}
+.se-sec-head{font-size:10px;color:var(--t3);text-transform:uppercase;
+  letter-spacing:1.6px;margin-bottom:-6px;padding-top:4px}
+.se-card{background:var(--card);border:1px solid var(--bdr);border-radius:16px;padding:0;overflow:hidden}
+.se-row{display:flex;justify-content:space-between;align-items:center;padding:14px 16px}
+.se-row+.se-row{border-top:1px solid rgba(200,151,42,.07)}
+.se-lbl{font-size:14px;color:var(--t1);margin-bottom:2px}
+.se-sub{font-size:11px;color:var(--t3)}
+.se-val{font-size:14px;color:var(--gold2);font-family:'Playfair Display',serif}
+.se-tag{font-size:10px;color:var(--sage2);background:rgba(90,155,109,.15);
+  border-radius:6px;padding:3px 8px;font-style:normal}
+.slider-wrap{padding:4px 16px 14px}
+.slider{-webkit-appearance:none;width:100%;height:4px;border-radius:99px;
+  background:var(--elev);outline:none}
+.slider::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;
+  border-radius:50%;background:var(--gold);cursor:pointer;
+  box-shadow:0 2px 8px rgba(200,151,42,.4)}
+.slider-row{display:flex;justify-content:space-between;align-items:center;
+  padding:8px 16px 0;font-size:12px;color:var(--t3)}
+.slider-hint{font-size:11px;color:var(--t3);padding:0 16px 12px;line-height:1.5;font-style:italic}
+.toggle{position:relative;width:46px;height:27px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.tog-sl{position:absolute;inset:0;background:var(--elev);border-radius:99px;
+  transition:background .3s;border:1px solid var(--bdr);cursor:pointer}
+.tog-sl::before{content:'';position:absolute;width:21px;height:21px;left:2px;top:2px;
+  background:var(--t3);border-radius:50%;transition:transform .3s,background .3s}
+input:checked+.tog-sl{background:var(--gold);border-color:var(--gold)}
+input:checked+.tog-sl::before{transform:translateX(19px);background:white}
+.upd-btn{display:block;width:calc(100% - 32px);margin:0 16px 14px;background:var(--elev);
+  border:1px solid var(--bdr);border-radius:11px;padding:12px;
+  color:var(--t1);font-family:'Crimson Pro',serif;font-size:14px;cursor:pointer;
+  text-align:center;transition:background .15s;touch-action:manipulation}
+.upd-btn:active{background:var(--bg)}
+.danger-btn{display:block;width:calc(100% - 32px);margin:0 16px 14px;
+  background:transparent;border:1px solid rgba(190,55,45,.3);border-radius:11px;padding:12px;
+  color:rgba(231,76,60,.75);font-family:'Crimson Pro',serif;font-size:14px;cursor:pointer;
+  text-align:center;touch-action:manipulation}
+.about-card{padding:14px 16px;font-size:13px;color:var(--t3);line-height:1.8}
+
+/* ══ INFO ════════════════════════════════════════ */
 #IN{justify-content:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .info-hdr{display:flex;align-items:center;gap:12px;width:100%;
   padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top) + 6px);
@@ -197,7 +229,6 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 #infoBody{width:100%;padding:0 14px;
   padding-bottom:max(32px,env(safe-area-inset-bottom)+20px);
   display:flex;flex-direction:column;gap:12px;max-width:450px;margin:0 auto}
-
 .photo-wrap{width:100%;border-radius:20px;overflow:hidden;
   position:relative;aspect-ratio:4/3;background:var(--elev)}
 .photo-wrap img{width:100%;height:100%;object-fit:cover;display:block}
@@ -209,38 +240,36 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .lc{background:rgba(39,174,96,.86);color:#fff}.nt{background:rgba(243,156,18,.86);color:#fff}
 .vu{background:rgba(230,126,34,.86);color:#fff}.en{background:rgba(231,76,60,.86);color:#fff}
 .cr{background:rgba(155,35,24,.92);color:#fff}.dd{background:rgba(90,90,90,.86);color:#fff}
-
 .name-card{background:var(--card);border:1px solid var(--bdr);border-radius:18px;padding:18px}
 .c-name{font-family:'Playfair Display',serif;font-size:30px;font-weight:700;line-height:1.1;margin-bottom:4px}
 .s-name{font-size:16px;color:var(--gold);font-style:italic;margin-bottom:5px}
 .desc-row{font-size:13px;color:var(--t3);line-height:1.45}
-
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
 .tile{background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:13px 12px}
 .tile.w{grid-column:1/-1}
 .t-lbl{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1.6px;margin-bottom:5px}
 .t-val{font-size:13px;color:var(--t1);line-height:1.45}
-
 .fact{background:linear-gradient(135deg,var(--elev),var(--card));
   border:1px solid rgba(200,151,42,.20);border-radius:18px;padding:18px}
 .f-lbl{font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px}
 .f-txt{font-size:15px;color:var(--t1);line-height:1.65;font-style:italic}
 .f-link{display:block;margin-top:12px;font-size:13px;color:var(--gold);text-decoration:none;font-style:normal}
-
+.call-card{background:var(--card);border:1px solid var(--bdr);border-radius:18px;padding:18px}
+.call-card audio{width:100%;margin-top:8px;accent-color:var(--gold)}
+.call-credit{font-size:11px;color:var(--t3);margin-top:8px;line-height:1.5}
 .btn{width:100%;background:var(--gold);border:none;border-radius:13px;padding:14px;
   color:var(--bg);font-family:'Playfair Display',serif;font-size:15px;font-weight:700;
   letter-spacing:.3px;cursor:pointer;transition:all .18s;touch-action:manipulation}
 .btn:active{transform:scale(.96);opacity:.86}
 .btn.ghost{background:transparent;border:1.5px solid var(--gold);color:var(--gold)}
 
-/* ── ERROR ── */
+/* ══ ERROR ═════════════════════════════════════ */
 #ER{justify-content:center;padding:24px}
 .err-box{background:var(--card);border:1px solid rgba(190,55,45,.28);
   border-radius:22px;padding:28px 22px;text-align:center;max-width:360px;width:100%}
 .err-ico{font-size:48px;margin-bottom:14px}
 .err-ttl{font-family:'Playfair Display',serif;font-size:22px;margin-bottom:8px}
-.err-msg{font-size:13px;color:var(--t2);margin-bottom:22px;line-height:1.65;
-  word-break:break-word;text-align:left}
+.err-msg{font-size:13px;color:var(--t2);margin-bottom:22px;line-height:1.65;text-align:left;word-break:break-word}
 .err-alt{display:block;margin-top:12px;font-size:12px;color:var(--t3);text-decoration:none}
 
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -249,7 +278,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 </head>
 <body>
 
-<!-- ═══ LOAD ═══════════════════════════════════ -->
+<!-- ══ LOAD ══════════════════════════════════════ -->
 <div id="LD" class="scr">
   <div class="ld-bird">🦉</div>
   <div class="ld-logo">Aviara</div>
@@ -261,20 +290,20 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
     <div class="ld-note">
       BirdNET downloads <strong>once</strong> and is saved on your device.
-      After that it works completely <strong>offline</strong> — no internet, no account, no cost, ever.
+      Works completely <strong>offline</strong> after that — no internet, no account, no cost.
     </div>
   </div>
 </div>
 
-<!-- ═══ LISTEN ══════════════════════════════════ -->
+<!-- ══ LISTEN ════════════════════════════════════ -->
 <div id="LI" class="scr off">
   <div class="topbar">
     <div class="toplogo">🪶 Aviara</div>
-    <div class="icobtn" onclick="showAbout()">ℹ️</div>
+    <div class="icobtn" onclick="goTab('SE')">⚙️</div>
   </div>
   <div class="spec-wrap">
     <canvas id="specCanvas"></canvas>
-    <div class="spec-lbl">Live Spectrogram · 400–10 000 Hz</div>
+    <div class="spec-lbl">Live Spectrogram · 400 – 10 000 Hz</div>
     <div class="freq-axis"><span>10k</span><span>5k</span><span>2k</span><span>400</span></div>
   </div>
   <div class="wave-wrap"><canvas id="waveCanvas"></canvas></div>
@@ -282,98 +311,208 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     <div id="statusLbl">Tap Start to identify birds</div>
     <button id="listenBtn" onclick="toggleListen()">🎙 Start</button>
   </div>
+  <div class="loc-pill" id="locPill">📍 <span id="locText">Getting location…</span></div>
   <div class="feed-bar">
     <div class="feed-ttl">🐦 This Session</div>
     <div class="feed-clr" onclick="clearFeed()">Clear</div>
   </div>
   <div id="feed">
     <div class="empty" id="emptyState">
-      Press <strong>Start</strong>, then hold your phone near a bird sound.<br>
-      Tap any card for full field notes.
+      Press <strong>Start</strong>, hold your phone near a bird sound.<br>
+      Tap any result for full field notes.
     </div>
   </div>
-  <!-- shared tab bar -->
-  <div class="tab-bar">
-    <div class="tab-btn act" id="tab-li" onclick="goTab('LI')">
-      <span class="ti">🎙</span><span class="tl">Listen</span>
-    </div>
-    <div class="tab-btn" id="tab-st" onclick="goTab('ST')">
-      <span class="ti">📊</span><span class="tl">Stats</span>
-    </div>
+  <div class="tbar">
+    <div class="tb act" data-tab="LI" onclick="goTab('LI')"><span class="ti">🎙</span><span class="tl">Listen</span></div>
+    <div class="tb" data-tab="ST" onclick="goTab('ST')"><span class="ti">📊</span><span class="tl">Stats</span></div>
+    <div class="tb" data-tab="MA" onclick="goTab('MA')"><span class="ti">🗺</span><span class="tl">Map</span></div>
+    <div class="tb" data-tab="SE" onclick="goTab('SE')"><span class="ti">⚙️</span><span class="tl">Settings</span></div>
   </div>
 </div>
 
-<!-- ═══ STATS ═══════════════════════════════════ -->
+<!-- ══ STATS ═════════════════════════════════════ -->
 <div id="ST" class="scr off">
   <div class="st-header">
     <div class="st-title">My Birds</div>
-    <div class="export-btn" onclick="exportCSV()">⬇︎ Export CSV</div>
+    <div class="exp-btn" onclick="exportCSV()">⬇ Export CSV</div>
   </div>
-
-  <div class="st-body" id="stBody">
-    <!-- rendered by JS -->
-  </div>
-
-  <!-- shared tab bar (duplicate so it shows on this screen too) -->
-  <div class="tab-bar">
-    <div class="tab-btn" id="tab-li2" onclick="goTab('LI')">
-      <span class="ti">🎙</span><span class="tl">Listen</span>
-    </div>
-    <div class="tab-btn act" id="tab-st2" onclick="goTab('ST')">
-      <span class="ti">📊</span><span class="tl">Stats</span>
-    </div>
+  <div class="st-body" id="stBody"></div>
+  <div class="tbar">
+    <div class="tb" data-tab="LI" onclick="goTab('LI')"><span class="ti">🎙</span><span class="tl">Listen</span></div>
+    <div class="tb act" data-tab="ST" onclick="goTab('ST')"><span class="ti">📊</span><span class="tl">Stats</span></div>
+    <div class="tb" data-tab="MA" onclick="goTab('MA')"><span class="ti">🗺</span><span class="tl">Map</span></div>
+    <div class="tb" data-tab="SE" onclick="goTab('SE')"><span class="ti">⚙️</span><span class="tl">Settings</span></div>
   </div>
 </div>
 
-<!-- ═══ INFO ════════════════════════════════════ -->
+<!-- ══ MAP ═══════════════════════════════════════ -->
+<div id="MA" class="scr off">
+  <div class="topbar">
+    <div class="toplogo">🗺 Detection Map</div>
+    <div class="icobtn" onclick="refreshMap()" title="Refresh">↺</div>
+  </div>
+  <div id="mapDiv"></div>
+  <div id="noLocMsg" class="no-loc-msg" style="display:none">
+    <span>📍</span>
+    <span>No location data yet</span>
+    <span>Enable location in Settings ⚙️ then start detecting birds</span>
+  </div>
+  <div class="tbar">
+    <div class="tb" data-tab="LI" onclick="goTab('LI')"><span class="ti">🎙</span><span class="tl">Listen</span></div>
+    <div class="tb" data-tab="ST" onclick="goTab('ST')"><span class="ti">📊</span><span class="tl">Stats</span></div>
+    <div class="tb act" data-tab="MA" onclick="goTab('MA')"><span class="ti">🗺</span><span class="tl">Map</span></div>
+    <div class="tb" data-tab="SE" onclick="goTab('SE')"><span class="ti">⚙️</span><span class="tl">Settings</span></div>
+  </div>
+</div>
+
+<!-- ══ SETTINGS ══════════════════════════════════ -->
+<div id="SE" class="scr off">
+  <div class="topbar" style="padding-bottom:6px">
+    <div class="toplogo">⚙️ Settings</div>
+  </div>
+  <div class="se-body">
+
+    <div class="se-sec-head">🧠 AI Model</div>
+    <div class="se-card">
+      <div class="se-row">
+        <div><div class="se-lbl">BirdNET V2.4</div><div class="se-sub">6,500+ species worldwide</div></div>
+        <span class="se-tag">Active</span>
+      </div>
+      <div class="se-row" style="padding-top:4px;padding-bottom:4px">
+        <div class="se-sub" style="font-size:12px;color:var(--t3)">
+          Clear cache to download the latest version if BirdNET releases an update
+        </div>
+      </div>
+      <button class="upd-btn" onclick="checkUpdate()">🔄 Check for Update & Re-download</button>
+    </div>
+
+    <div class="se-sec-head">🎯 Detection Sensitivity</div>
+    <div class="se-card">
+      <div class="slider-row">
+        <span>Less sensitive</span>
+        <span id="confVal" style="color:var(--gold2);font-family:'Playfair Display',serif;font-size:16px;font-weight:700">12%</span>
+        <span>More sensitive</span>
+      </div>
+      <div class="slider-wrap">
+        <input type="range" class="slider" min="5" max="60" value="12"
+          id="confSlider" oninput="updateThreshold(this.value)">
+      </div>
+      <div class="slider-hint">
+        Lower % = more detections (may include uncertain results).<br>
+        Higher % = only very confident identifications shown.
+      </div>
+    </div>
+
+    <div class="se-sec-head">📍 Location</div>
+    <div class="se-card">
+      <div class="se-row">
+        <div>
+          <div class="se-lbl">Tag detections with GPS</div>
+          <div class="se-sub">Saves location name with each bird detected</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="locToggle" onchange="toggleLocation(this.checked)">
+          <span class="tog-sl"></span>
+        </label>
+      </div>
+      <div class="se-row" id="locStatus" style="display:none">
+        <div class="se-sub" id="locStatusTxt" style="color:var(--sage2)">📍 Location active</div>
+      </div>
+    </div>
+
+    <div class="se-sec-head">📁 Your Data</div>
+    <div class="se-card">
+      <div class="se-row">
+        <div class="se-lbl">Detections saved</div>
+        <div class="se-val" id="histCount">0</div>
+      </div>
+      <button class="danger-btn" onclick="clearAllData()">🗑 Clear All Detection History</button>
+    </div>
+
+    <div class="se-sec-head">ℹ️ About</div>
+    <div class="se-card">
+      <div class="about-card">
+        <div>🧠 BirdNET AI by Cornell Lab & TU Chemnitz</div>
+        <div>📖 Bird info from iNaturalist & Wikipedia</div>
+        <div>🎵 Bird calls from xeno-canto</div>
+        <div>🗺 Maps from OpenStreetMap via Leaflet</div>
+        <div style="margin-top:10px;color:var(--gold)">100% free · No account · Runs offline</div>
+      </div>
+    </div>
+
+  </div>
+  <div class="tbar">
+    <div class="tb" data-tab="LI" onclick="goTab('LI')"><span class="ti">🎙</span><span class="tl">Listen</span></div>
+    <div class="tb" data-tab="ST" onclick="goTab('ST')"><span class="ti">📊</span><span class="tl">Stats</span></div>
+    <div class="tb" data-tab="MA" onclick="goTab('MA')"><span class="ti">🗺</span><span class="tl">Map</span></div>
+    <div class="tb act" data-tab="SE" onclick="goTab('SE')"><span class="ti">⚙️</span><span class="tl">Settings</span></div>
+  </div>
+</div>
+
+<!-- ══ INFO ══════════════════════════════════════ -->
 <div id="IN" class="scr off">
   <div class="info-hdr">
-    <div class="icobtn" id="infoBack" onclick="show('LI')">←</div>
+    <div class="icobtn" id="infoBack">←</div>
     <div class="info-hdr-lbl">Field Notes</div>
   </div>
   <div id="infoBody"></div>
 </div>
 
-<!-- ═══ ERROR ═══════════════════════════════════ -->
+<!-- ══ ERROR ═════════════════════════════════════ -->
 <div id="ER" class="scr off">
   <div class="err-box">
     <div class="err-ico">⚠️</div>
     <div class="err-ttl" id="errTtl">Setup failed</div>
-    <div class="err-msg"  id="errMsg">Something went wrong.</div>
+    <div class="err-msg"  id="errMsg"></div>
     <button class="btn" onclick="location.reload()">↺ Try Again</button>
     <a class="err-alt" href="https://birdnet-team.github.io/real-time-pwa/" target="_blank">
-      Or use the official BirdNET Live app instead →
+      Or use the official BirdNET Live app →
     </a>
   </div>
 </div>
 
 <script>
-/* ═══════════════════════════════════════════════
-   URLS — verified correct May 2026
-   justinchuby/BirdNET-onnx on HuggingFace
-═══════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════
+   CONFIG
+════════════════════════════════════════════════ */
 const MODEL_URL  = 'https://huggingface.co/justinchuby/BirdNET-onnx/resolve/main/model.onnx';
 const LABELS_URL = 'https://huggingface.co/justinchuby/BirdNET-onnx/resolve/main/BirdNET_GLOBAL_6K_V2.4_Labels.txt';
 const CACHE_KEY  = 'aviara-v2';
 const HIST_KEY   = 'aviara_history';
+const SETT_KEY   = 'aviara_settings';
 const TARGET_SR  = 48000;
 const CHUNK_SEC  = 3.0;
-const THRESHOLD  = 0.12;
-const MAX_HIST   = 1000; // max stored detections
+const MAX_HIST   = 1000;
 
-/* ═══════════════════════════════════════════════
+/* ════════════════════════════════════════════════
+   SETTINGS
+════════════════════════════════════════════════ */
+const DEF_SETTINGS = { threshold: 12, useLocation: true };
+let settings = (() => {
+  try { return { ...DEF_SETTINGS, ...JSON.parse(localStorage.getItem(SETT_KEY)||'{}') }; }
+  catch(e) { return { ...DEF_SETTINGS }; }
+})();
+function saveSettings() {
+  try { localStorage.setItem(SETT_KEY, JSON.stringify(settings)); } catch(e) {}
+}
+
+/* ════════════════════════════════════════════════
    STATE
-═══════════════════════════════════════════════ */
+════════════════════════════════════════════════ */
 let ortSession = null, labels = [];
 let audioCtx = null, analyser = null, scriptProc = null, mediaStream = null;
 let listening = false, inferring = false, nativeSR = 48000;
 let audioBuf = [], bufSecs = 0;
 let specCtx = null, waveCtx = null, specX = 0, specRAF = null;
-let infoFromScreen = 'LI'; // so Back button returns to right screen
+let infoFromTab = 'LI';
+let currentLoc  = null;  // { lat, lon, place }
+let locInterval = null;
+let leafletMap  = null;
+let mapLayer    = null;
 
-/* ═══════════════════════════════════════════════
+/* ════════════════════════════════════════════════
    BOOT
-═══════════════════════════════════════════════ */
+════════════════════════════════════════════════ */
 window.addEventListener('load', async () => {
   try {
     ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/';
@@ -389,13 +528,14 @@ window.addEventListener('load', async () => {
     setStep(2,true);
 
     setStep(3); setProg(88);
-    ortSession = await ort.InferenceSession.create(buf,{
+    ortSession = await ort.InferenceSession.create(buf, {
       executionProviders:['wasm'], graphOptimizationLevel:'all'
     });
     setStep(3,true); setProg(100);
 
     await sleep(300);
     setupCanvases();
+    applySettings();
     show('LI');
   } catch(e) {
     console.error(e);
@@ -403,15 +543,15 @@ window.addEventListener('load', async () => {
   }
 });
 
-/* ═══════════════════════════════════════════════
+/* ════════════════════════════════════════════════
    LABELS
-═══════════════════════════════════════════════ */
+════════════════════════════════════════════════ */
 async function loadLabels() {
   let text = await cacheGet(LABELS_URL,'text');
   if (!text) {
     let r;
     try { r = await fetch(LABELS_URL); }
-    catch(e) { throw new Error('No internet. Connect and reload to load for the first time.'); }
+    catch(e) { throw new Error('No internet connection. Please connect and reload.'); }
     if (!r.ok) throw new Error(`Labels not found (HTTP ${r.status})`);
     text = await r.text();
     cachePut(LABELS_URL, text, 'text/plain');
@@ -419,14 +559,14 @@ async function loadLabels() {
   return text.trim().split('\n').map(line => {
     line = line.trim();
     const i = line.indexOf('_');
-    if (i < 0) return {sci:line, com:line};
-    return {sci:line.slice(0,i), com:line.slice(i+1)};
+    if (i < 0) return { sci:line, com:line };
+    return { sci:line.slice(0,i), com:line.slice(i+1) };
   }).filter(l => l.sci.length > 0);
 }
 
-/* ═══════════════════════════════════════════════
-   MODEL
-═══════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════
+   MODEL DOWNLOAD
+════════════════════════════════════════════════ */
 async function downloadModel() {
   const cached = await cacheGet(MODEL_URL,'buffer');
   if (cached) {
@@ -436,14 +576,14 @@ async function downloadModel() {
   }
   let res;
   try { res = await fetch(MODEL_URL); }
-  catch(e) { throw new Error('Cannot reach HuggingFace. Check internet connection.'); }
+  catch(e) { throw new Error('Cannot reach HuggingFace. Check your internet connection.'); }
   if (!res.ok) throw new Error(`Model download failed (HTTP ${res.status})`);
 
   const total = parseInt(res.headers.get('Content-Length')||'0');
   const reader = res.body.getReader();
   const parts = []; let got = 0;
   while (true) {
-    const {done,value} = await reader.read();
+    const { done, value } = await reader.read();
     if (done) break;
     parts.push(value); got += value.length;
     if (total > 0) {
@@ -458,9 +598,48 @@ async function downloadModel() {
   return all.buffer;
 }
 
-/* ═══════════════════════════════════════════════
+/* ════════════════════════════════════════════════
+   LOCATION
+════════════════════════════════════════════════ */
+function startLocation() {
+  if (!settings.useLocation || !navigator.geolocation) return;
+  fetchLocation();
+  locInterval = setInterval(fetchLocation, 90000); // refresh every 90s
+}
+function stopLocation() {
+  clearInterval(locInterval); locInterval = null;
+}
+
+function fetchLocation() {
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const lat = pos.coords.latitude, lon = pos.coords.longitude;
+    currentLoc = { lat, lon, place: '' };
+    // Reverse geocode with Nominatim (free, OpenStreetMap)
+    try {
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
+        { headers:{ 'User-Agent':'Aviara Bird ID/1.0' } }
+      );
+      const d = await r.json();
+      const a = d.address || {};
+      currentLoc.place = a.city || a.town || a.village || a.suburb || a.county || a.country || '';
+    } catch(e) {}
+    // Update pill
+    const pill = document.getElementById('locPill');
+    const txt  = document.getElementById('locText');
+    if (pill && txt) {
+      pill.style.display = 'block';
+      txt.textContent = currentLoc.place || `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
+    }
+    // Update settings status
+    const st = document.getElementById('locStatusTxt');
+    if (st) st.textContent = '📍 ' + (currentLoc.place || 'Location active');
+  }, () => {}, { timeout:10000, enableHighAccuracy:false });
+}
+
+/* ════════════════════════════════════════════════
    AUDIO
-═══════════════════════════════════════════════ */
+════════════════════════════════════════════════ */
 async function toggleListen() { listening ? stopListen() : await startListen(); }
 
 async function startListen() {
@@ -468,12 +647,12 @@ async function startListen() {
   if (audioCtx.state === 'suspended') await audioCtx.resume();
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}
+      audio:{ echoCancellation:false, noiseSuppression:false, autoGainControl:false }
     });
   } catch(e) {
     if (e.name==='NotAllowedError')
       alert('Microphone permission required.\n\niPhone: Settings → Safari → Microphone → Allow.\nThen reload.');
-    else alert('Cannot access microphone: '+e.message);
+    else alert('Cannot access microphone: ' + e.message);
     return;
   }
   nativeSR = audioCtx.sampleRate;
@@ -486,14 +665,17 @@ async function startListen() {
   audioBuf=[]; bufSecs=0;
   scriptProc.onaudioprocess = onAudio;
   listening = true;
+  startLocation();
   setListenUI(true); clearSpec(); startSpecLoop();
 }
 
 function stopListen() {
   listening = false;
-  if (scriptProc) { scriptProc.disconnect(); scriptProc=null; }
+  if (scriptProc)  { scriptProc.disconnect(); scriptProc=null; }
   if (mediaStream) { mediaStream.getTracks().forEach(t=>t.stop()); mediaStream=null; }
-  stopSpecLoop(); idleWave(); setListenUI(false);
+  stopLocation(); stopSpecLoop(); idleWave(); setListenUI(false);
+  const pill = document.getElementById('locPill');
+  if (pill) pill.style.display='none';
 }
 
 function onAudio(e) {
@@ -519,53 +701,53 @@ function resample(data,from,to) {
   return out;
 }
 
-/* ═══════════════════════════════════════════════
+/* ════════════════════════════════════════════════
    INFERENCE
-═══════════════════════════════════════════════ */
+════════════════════════════════════════════════ */
 async function runInference(raw) {
   if (!ortSession||inferring) return;
   inferring = true;
   try {
     let audio = nativeSR===TARGET_SR ? raw : resample(raw,nativeSR,TARGET_SR);
-    const N = TARGET_SR*CHUNK_SEC; // 144000
+    const N = TARGET_SR*CHUNK_SEC;
     if (audio.length<N){const p=new Float32Array(N);p.set(audio);audio=p;}
     else if (audio.length>N) audio=audio.slice(0,N);
     const tensor = new ort.Tensor('float32',audio,[1,N]);
-    const feeds = {}; feeds[ortSession.inputNames[0]]=tensor;
-    const out = await ortSession.run(feeds);
+    const feeds  = {}; feeds[ortSession.inputNames[0]]=tensor;
+    const out    = await ortSession.run(feeds);
     const scores = out[ortSession.outputNames[0]].data;
-    let bestIdx=-1, bestVal=THRESHOLD;
+    let bestIdx=-1, bestVal=settings.threshold/100;
     for (let i=0;i<scores.length&&i<labels.length;i++)
-      if (scores[i]>bestVal){bestVal=scores[i];bestIdx=i;}
-    if (bestIdx>=0) addDetection(labels[bestIdx],bestVal);
-  } catch(e) { console.warn('Inference:',e.message||e); }
+      if (scores[i]>bestVal){ bestVal=scores[i]; bestIdx=i; }
+    if (bestIdx>=0) addDetection(labels[bestIdx], bestVal);
+  } catch(e) { console.warn('Inference:', e.message||e); }
   finally { inferring=false; }
 }
 
-/* ═══════════════════════════════════════════════
-   HISTORY  (persisted in localStorage)
-═══════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════
+   HISTORY
+════════════════════════════════════════════════ */
 function loadHistory() {
-  try { return JSON.parse(localStorage.getItem(HIST_KEY)||'[]'); }
-  catch(e) { return []; }
+  try { return JSON.parse(localStorage.getItem(HIST_KEY)||'[]'); } catch(e) { return []; }
 }
 function saveHistory(h) {
-  try { localStorage.setItem(HIST_KEY, JSON.stringify(h.slice(0,MAX_HIST))); } catch(e){}
+  try { localStorage.setItem(HIST_KEY, JSON.stringify(h.slice(0,MAX_HIST))); } catch(e) {}
 }
 function pushHistory(lbl, score) {
   const h = loadHistory();
-  h.unshift({t:Date.now(), com:lbl.com, sci:lbl.sci, s:Math.round(score*100)});
+  const entry = { t:Date.now(), com:lbl.com, sci:lbl.sci, s:Math.round(score*100) };
+  if (currentLoc) { entry.lat=currentLoc.lat; entry.lon=currentLoc.lon; entry.place=currentLoc.place; }
+  h.unshift(entry);
   saveHistory(h);
+  return entry;
 }
 
-/* ═══════════════════════════════════════════════
-   DETECTION CARDS  (live feed)
-═══════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════
+   DETECTION CARDS
+════════════════════════════════════════════════ */
 function addDetection(lbl, score) {
-  // Save to persistent history
-  pushHistory(lbl, score);
-
-  const feed = document.getElementById('feed');
+  const entry = pushHistory(lbl, score);
+  const feed  = document.getElementById('feed');
   document.getElementById('emptyState')?.remove();
 
   const pct   = Math.round(score*100);
@@ -574,202 +756,257 @@ function addDetection(lbl, score) {
   const time  = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 
   const card = document.createElement('div');
-  card.className = 'det';
+  card.className='det';
   card.innerHTML =
     `<div class="det-l">
        <div class="det-name">${esc(lbl.com)}</div>
        <div class="det-sci">${esc(lbl.sci)}</div>
+       ${entry.place?`<div class="det-loc">📍 ${esc(entry.place)}</div>`:''}
        <div class="det-bar"><div class="det-bar-fill" style="width:${pct}%;background:${color}"></div></div>
      </div>
      <div class="det-r">
        <div class="det-pct ${cls}">${pct}%</div>
        <div class="det-t">${time}</div>
      </div>`;
-  card.addEventListener('click',()=>{ infoFromScreen='LI'; openInfo(lbl); });
-  feed.insertBefore(card,feed.firstChild);
+  card.addEventListener('click',()=>{ infoFromTab='LI'; openInfo(lbl); });
+  feed.insertBefore(card, feed.firstChild);
   while(feed.children.length>60) feed.removeChild(feed.lastChild);
 }
 
 function clearFeed() {
   document.getElementById('feed').innerHTML =
     `<div class="empty" id="emptyState">
-       Press <strong>Start</strong>, then hold your phone near a bird sound.<br>
-       Tap any card for full field notes.
+       Press <strong>Start</strong>, hold your phone near a bird sound.<br>
+       Tap any result for full field notes.
      </div>`;
 }
 
-/* ═══════════════════════════════════════════════
-   STATS SCREEN
-═══════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════
+   STATS
+════════════════════════════════════════════════ */
 function renderStats() {
   const history = loadHistory();
   const body = document.getElementById('stBody');
-
-  if (history.length === 0) {
-    body.innerHTML =
-      `<div class="empty" style="padding:60px 20px">
-         No detections yet.<br>Go to <strong>Listen</strong> to start identifying birds.
-       </div>`;
+  if (history.length===0) {
+    body.innerHTML=`<div class="empty" style="padding:60px 20px">
+      No detections yet.<br>Tap <strong>Listen</strong> to start.
+    </div>`;
     return;
   }
-
-  // Aggregate by species
-  const bySpecies = {};
+  const byS={};
   for (const d of history) {
-    if (!bySpecies[d.sci]) bySpecies[d.sci] = {com:d.com,sci:d.sci,count:0,last:0,best:0};
-    bySpecies[d.sci].count++;
-    if (d.t > bySpecies[d.sci].last) bySpecies[d.sci].last = d.t;
-    if (d.s > bySpecies[d.sci].best) bySpecies[d.sci].best = d.s;
+    if (!byS[d.sci]) byS[d.sci]={com:d.com,sci:d.sci,count:0,last:0,best:0};
+    byS[d.sci].count++;
+    if(d.t>byS[d.sci].last) byS[d.sci].last=d.t;
+    if(d.s>byS[d.sci].best) byS[d.sci].best=d.s;
   }
-  const ranked = Object.values(bySpecies).sort((a,b)=>b.count-a.count);
-  const topCount = ranked[0].count;
+  const ranked = Object.values(byS).sort((a,b)=>b.count-a.count);
+  const topN   = ranked[0].count;
+  const today  = history.filter(d=>new Date(d.t).toDateString()===new Date().toDateString()).length;
 
-  // Summary pills
-  const todayCount = history.filter(d => {
-    const ds = new Date(d.t), now = new Date();
-    return ds.toDateString() === now.toDateString();
-  }).length;
+  let html=`<div class="sum-row">
+    <div class="sum-pill"><div class="sum-n">${history.length}</div><div class="sum-l">Total</div></div>
+    <div class="sum-pill"><div class="sum-n">${ranked.length}</div><div class="sum-l">Species</div></div>
+    <div class="sum-pill"><div class="sum-n">${today}</div><div class="sum-l">Today</div></div>
+  </div>`;
 
-  let html =
-    `<div class="summary-row">
-       <div class="sum-pill"><div class="sum-n">${history.length}</div><div class="sum-l">Total</div></div>
-       <div class="sum-pill"><div class="sum-n">${ranked.length}</div><div class="sum-l">Species</div></div>
-       <div class="sum-pill"><div class="sum-n">${todayCount}</div><div class="sum-l">Today</div></div>
-     </div>`;
-
-  // Frequent visitors
-  const medals = ['🥇','🥈','🥉'];
-  const rankCls = ['rank-1','rank-2','rank-3'];
-  html += `<div class="sec-head">🏆 Frequent Visitors</div>`;
-  const topN = ranked.slice(0,10);
-  topN.forEach((v,i) => {
-    const pct = Math.round((v.count/topCount)*100);
-    const medal = i < 3 ? medals[i] : String(i+1);
-    const rCls  = i < 3 ? rankCls[i] : 'rank-rest';
-    const lastDate = new Date(v.last);
-    const lastStr  = lastDate.toLocaleDateString([],{month:'short',day:'numeric'})
-                   + ' ' + lastDate.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-    html +=
-      `<div class="vis-card" onclick='openInfoByName(${JSON.stringify(v)})'>
-         <div class="vis-rank ${rCls}">${medal}</div>
-         <div class="vis-info">
-           <div class="vis-name">${esc(v.com)}</div>
-           <div class="vis-sci">${esc(v.sci)}</div>
-           <div class="vis-bar-wrap"><div class="vis-bar-fill" style="width:${pct}%"></div></div>
-         </div>
-         <div class="vis-count">
-           <div class="vis-n">${v.count}</div>
-           <div class="vis-seen">${v.count===1?'time':'times'}</div>
-         </div>
-       </div>`;
+  const medals=['🥇','🥈','🥉'];
+  const rkCls=['rk1','rk2','rk3'];
+  html+=`<div class="sec-head">🏆 Frequent Visitors</div>`;
+  ranked.slice(0,10).forEach((v,i)=>{
+    const pct=Math.round((v.count/topN)*100);
+    const ls=new Date(v.last);
+    html+=`<div class="vis-card" onclick='openInfoByName(${JSON.stringify({com:v.com,sci:v.sci})})'>
+      <div class="vis-rank ${i<3?rkCls[i]:'rk_'}">${i<3?medals[i]:i+1}</div>
+      <div class="vis-info">
+        <div class="vis-name">${esc(v.com)}</div>
+        <div class="vis-sci">${esc(v.sci)}</div>
+        <div class="vis-bw"><div class="vis-bf" style="width:${pct}%"></div></div>
+      </div>
+      <div class="vis-ct">
+        <div class="vis-n">${v.count}</div>
+        <div class="vis-s">${v.count===1?'time':'times'}</div>
+      </div>
+    </div>`;
   });
 
-  // Recent detections (last 60)
-  html += `<div class="sec-head">🕐 Detection History</div>`;
-  html += `<div class="hist-wrap">`;
-  history.slice(0,60).forEach(d => {
-    const dt = new Date(d.t);
-    const dateStr = dt.toLocaleDateString([],{month:'short',day:'numeric'});
-    const timeStr = dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-    const cls = d.s>=70?'hi':d.s>=35?'md':'lo';
-    html +=
-      `<div class="hist-item" onclick='openInfoByName(${JSON.stringify({com:d.com,sci:d.sci})})'>
-         <div>
-           <div class="hist-name">${esc(d.com)}</div>
-           <div class="hist-sci">${esc(d.sci)}</div>
-         </div>
-         <div class="hist-right">
-           <div class="hist-pct ${cls}">${d.s}%</div>
-           <div class="hist-time">${dateStr} · ${timeStr}</div>
-         </div>
-       </div>`;
+  html+=`<div class="sec-head">🕐 Detection History</div><div class="hist-wrap">`;
+  history.slice(0,80).forEach(d=>{
+    const dt=new Date(d.t);
+    const ds=dt.toLocaleDateString([],{month:'short',day:'numeric'});
+    const ts=dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const cls=d.s>=70?'hi':d.s>=35?'md':'lo';
+    html+=`<div class="hist-item" onclick='openInfoByName(${JSON.stringify({com:d.com,sci:d.sci})})'>
+      <div>
+        <div class="hist-name">${esc(d.com)}</div>
+        <div class="hist-sci">${esc(d.sci)}</div>
+        ${d.place?`<div class="hist-loc">📍 ${esc(d.place)}</div>`:''}
+      </div>
+      <div class="hist-r">
+        <div class="hist-pct ${cls}">${d.s}%</div>
+        <div class="hist-time">${ds} · ${ts}</div>
+      </div>
+    </div>`;
   });
-  html += `</div>`;
-
-  // Clear button
-  html +=
-    `<button class="clr-hist" onclick="clearHistory()">
-       🗑 Clear All Detection History
-     </button>`;
-
-  body.innerHTML = html;
+  html+=`</div>`;
+  body.innerHTML=html;
 }
 
-function clearHistory() {
-  if (!confirm('Delete all detection history? This cannot be undone.')) return;
-  localStorage.removeItem(HIST_KEY);
-  renderStats();
+/* ════════════════════════════════════════════════
+   MAP  (Leaflet lazy-loaded)
+════════════════════════════════════════════════ */
+function loadLeaflet() {
+  return new Promise((resolve,reject)=>{
+    if (window.L){ resolve(); return; }
+    const css=document.createElement('link');
+    css.rel='stylesheet';
+    css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(css);
+    const s=document.createElement('script');
+    s.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s.onload=resolve; s.onerror=reject;
+    document.head.appendChild(s);
+  });
 }
 
-/* ═══════════════════════════════════════════════
-   EXPORT CSV
-═══════════════════════════════════════════════ */
-function exportCSV() {
+async function initMap() {
+  if (leafletMap) return;
+  await loadLeaflet();
+  delete L.Icon.Default.prototype._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+    iconUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+    shadowUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  });
+  leafletMap = L.map('mapDiv',{ tap:false });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© <a href="https://openstreetmap.org">OpenStreetMap</a>',maxZoom:19
+  }).addTo(leafletMap);
+}
+
+async function renderMap() {
   const history = loadHistory();
-  if (history.length === 0) { alert('No detections to export yet.'); return; }
+  const withLoc = history.filter(d=>d.lat&&d.lon);
+  const noMsg   = document.getElementById('noLocMsg');
+  const mapDiv  = document.getElementById('mapDiv');
 
-  const rows = [['Date','Time','Common Name','Scientific Name','Confidence %']];
+  if (withLoc.length===0) {
+    mapDiv.style.display='none';
+    if(noMsg) noMsg.style.display='flex';
+    return;
+  }
+  mapDiv.style.display='block';
+  if(noMsg) noMsg.style.display='none';
+
+  await initMap();
+  setTimeout(()=>{ leafletMap.invalidateSize(); plotMarkers(withLoc); }, 120);
+}
+
+function plotMarkers(withLoc) {
+  if (!leafletMap) return;
+  if (mapLayer) { leafletMap.removeLayer(mapLayer); }
+  mapLayer = L.layerGroup().addTo(leafletMap);
+
+  const birdIcon = L.divIcon({
+    html:'<div style="font-size:22px;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.8))">🐦</div>',
+    iconSize:[28,28], iconAnchor:[14,14], popupAnchor:[0,-14], className:''
+  });
+
+  const bounds=[];
+  withLoc.forEach(d=>{
+    const dt=new Date(d.t);
+    const m=L.marker([d.lat,d.lon],{icon:birdIcon}).addTo(mapLayer);
+    m.bindPopup(
+      `<div style="font-family:Georgia,serif;min-width:170px;line-height:1.6">
+        <b style="font-size:15px">${esc(d.com)}</b><br>
+        <i style="font-size:12px;color:#777">${esc(d.sci)}</i><br>
+        <span style="font-size:12px">📅 ${dt.toLocaleDateString()} · ${dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span><br>
+        <span style="font-size:12px">🎯 ${d.s}% confidence</span>
+        ${d.place?`<br><span style="font-size:12px">📍 ${esc(d.place)}</span>`:''}
+        <br><a href="#" onclick="event.preventDefault();openInfoByName({com:'${esc(d.com)}',sci:'${esc(d.sci)}'});leafletMap.closePopup()"
+          style="font-size:13px;color:#C8972A;text-decoration:none">View Field Notes →</a>
+      </div>`, {maxWidth:230}
+    );
+    bounds.push([d.lat,d.lon]);
+  });
+  leafletMap.fitBounds(bounds, {padding:[30,30], maxZoom:14});
+}
+
+function refreshMap() { renderMap(); }
+
+/* ════════════════════════════════════════════════
+   EXPORT CSV
+════════════════════════════════════════════════ */
+function exportCSV() {
+  const history=loadHistory();
+  if (!history.length){ alert('No detections to export yet.'); return; }
+  const rows=[['Date','Time','Common Name','Scientific Name','Confidence %','Location','Latitude','Longitude']];
   for (const d of history) {
-    const dt = new Date(d.t);
+    const dt=new Date(d.t);
     rows.push([
       dt.toLocaleDateString(),
       dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
-      d.com, d.sci, d.s
+      d.com, d.sci, d.s,
+      d.place||'', d.lat||'', d.lon||''
     ]);
   }
-  const csv  = rows.map(r => r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
-  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = `aviara-birds-${new Date().toISOString().slice(0,10)}.csv`;
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=`aviara-birds-${new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click();
-  document.body.removeChild(a); URL.revokeObjectURL(url);
+  document.body.removeChild(a);
 }
 
-/* ═══════════════════════════════════════════════
-   BIRD INFO
-═══════════════════════════════════════════════ */
-function openInfoByName(lbl) {
-  infoFromScreen = 'ST';
-  openInfo(lbl);
-}
+/* ════════════════════════════════════════════════
+   BIRD INFO  (iNaturalist + Wikipedia + xeno-canto)
+════════════════════════════════════════════════ */
+function openInfoByName(lbl) { infoFromTab='ST'; openInfo(lbl); }
 
 async function openInfo(lbl) {
-  document.getElementById('infoBack').onclick = () => show(infoFromScreen);
+  document.getElementById('infoBack').onclick = ()=>goTab(infoFromTab);
   show('IN');
-  document.getElementById('IN').scrollTop = 0;
-  document.getElementById('infoBody').innerHTML =
+  document.getElementById('IN').scrollTop=0;
+  document.getElementById('infoBody').innerHTML=
     `<div style="text-align:center;padding:60px 20px">
        <div style="font-size:44px;display:inline-block;animation:spin 1.5s linear infinite">🪶</div>
        <div style="margin-top:14px;color:var(--t2);font-style:italic;font-size:15px">Fetching field notes…</div>
      </div>`;
 
-  const [iR,wR] = await Promise.allSettled([
-    fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(lbl.sci)}&rank=species&per_page=1`)
-      .then(r=>r.json()).catch(()=>null),
-    fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(lbl.com)}`)
-      .then(r=>r.ok?r.json():null).catch(()=>null)
+  const [iR,wR,cR] = await Promise.allSettled([
+    fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(lbl.sci)}&rank=species&per_page=1`).then(r=>r.json()).catch(()=>null),
+    fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(lbl.com)}`).then(r=>r.ok?r.json():null).catch(()=>null),
+    fetchBirdCall(lbl.sci)
   ]);
-  renderInfo(lbl, iR.value?.results?.[0]||null, wR.value||null);
+  renderInfo(lbl, iR.value?.results?.[0]||null, wR.value||null, cR.value||null);
 }
 
-const IUCN = {
+async function fetchBirdCall(sci) {
+  try {
+    const r=await fetch(`https://xeno-canto.org/api/2/recordings?query=${encodeURIComponent(sci+' q:A')}&page=1`);
+    if (!r.ok) return null;
+    const d=await r.json();
+    const rec=d.recordings?.[0];
+    if (!rec) return null;
+    return { url:'https:'+rec.file, rec:rec.rec, loc:rec.loc, cnt:rec.cnt, id:rec.id };
+  } catch(e) { return null; }
+}
+
+const IUCN={
   LC:{txt:'Least Concern',cls:'lc'}, NT:{txt:'Near Threatened',cls:'nt'},
   VU:{txt:'Vulnerable',cls:'vu'},    EN:{txt:'Endangered',cls:'en'},
   CR:{txt:'Critically Endangered',cls:'cr'}, EW:{txt:'Extinct in Wild',cls:'en'},
   EX:{txt:'Extinct',cls:'cr'},       DD:{txt:'Data Deficient',cls:'dd'},
 };
 
-function renderInfo(lbl,inat,wiki) {
-  const extract = wiki?.extract||'';
-  const photo = inat?.default_photo?.medium_url
-    || (wiki?.thumbnail?.source?.replace(/\/\d+px-/,'/640px-'))
-    || null;
-  const statuses = inat?.conservation_statuses||[];
-  const gStatus  = statuses.find(s=>!s.place_id)||statuses[0];
-  const code     = (gStatus?.status||'').toUpperCase().trim();
-  const iucn     = IUCN[code]||null;
+function renderInfo(lbl,inat,wiki,call) {
+  const extract=wiki?.extract||'';
+  const photo=inat?.default_photo?.medium_url
+    ||(wiki?.thumbnail?.source?.replace(/\/\d+px-/,'/640px-'))||null;
+  const statuses=inat?.conservation_statuses||[];
+  const gStatus=statuses.find(s=>!s.place_id)||statuses[0];
+  const code=(gStatus?.status||'').toUpperCase().trim();
+  const iucn=IUCN[code]||null;
 
   const lifespan  = parseLifespan(extract);
   const migration = parseMigration(extract);
@@ -778,29 +1015,37 @@ function renderInfo(lbl,inat,wiki) {
   const wingspan  = parseWingspan(extract);
 
   let tiles='';
-  if (iucn)      tiles+=mkTile('w','🛡️ Conservation',
-    `<span class="cs-badge ${iucn.cls}">${code}</span>&nbsp; ${iucn.txt}`);
+  if (iucn)      tiles+=mkTile('w','🛡️ Conservation',`<span class="cs-badge ${iucn.cls}">${code}</span>&nbsp; ${iucn.txt}`);
   if (migration) tiles+=mkTile('',`${migration.e} Migration`,migration.txt);
   if (lifespan)  tiles+=mkTile('','⏳ Lifespan',lifespan);
   if (diet)      tiles+=mkTile('','🍃 Diet',diet);
   if (habitat)   tiles+=mkTile('','🌿 Habitat',habitat);
   if (wingspan)  tiles+=mkTile('','📐 Wingspan',wingspan);
 
-  const about = extract.length>300
-    ? extract.slice(0,300).replace(/\s\S+$/,'')+'…' : extract;
-  const wikiUrl = wiki?.content_urls?.desktop?.page||null;
+  const about=extract.length>300?extract.slice(0,300).replace(/\s\S+$/,'')+'…':extract;
+  const wikiUrl=wiki?.content_urls?.desktop?.page||null;
 
-  // Count how many times detected
-  const hist    = loadHistory();
-  const myCount = hist.filter(d=>d.sci===lbl.sci).length;
-  const myBest  = hist.filter(d=>d.sci===lbl.sci).reduce((m,d)=>Math.max(m,d.s),0);
+  const hist=loadHistory();
+  const myCount=hist.filter(d=>d.sci===lbl.sci).length;
+  const myBest =hist.filter(d=>d.sci===lbl.sci).reduce((m,d)=>Math.max(m,d.s),0);
 
-  document.getElementById('infoBody').innerHTML =
+  // Bird call section
+  const callHtml = call
+    ? `<div class="call-card">
+         <div class="f-lbl">🎵 Bird Call</div>
+         <audio controls src="${esc(call.url)}"></audio>
+         <div class="call-credit">
+           Recorded by ${esc(call.rec)} · ${esc(call.loc)}, ${esc(call.cnt)} ·
+           <a href="https://xeno-canto.org/${call.id}" target="_blank" style="color:var(--gold)">xeno-canto #${call.id}</a>
+         </div>
+       </div>`
+    : '';
+
+  document.getElementById('infoBody').innerHTML=
     `<div class="photo-wrap">
-       ${photo
-         ? `<img src="${esc(photo)}" alt="${esc(lbl.com)}"
-              onerror="this.parentElement.innerHTML='<div class=\\'photo-ph\\'>🦜</div>'">`
-         : `<div class="photo-ph">🦜</div>`}
+       ${photo?`<img src="${esc(photo)}" alt="${esc(lbl.com)}"
+         onerror="this.parentElement.innerHTML='<div class=\\'photo-ph\\'>🦜</div>'">`
+         :`<div class="photo-ph">🦜</div>`}
        ${iucn?`<div class="cs-badge abs ${iucn.cls}">${iucn.txt}</div>`:''}
      </div>
 
@@ -810,16 +1055,13 @@ function renderInfo(lbl,inat,wiki) {
        ${wiki?.description?`<div class="desc-row">${esc(wiki.description)}</div>`:''}
      </div>
 
-     ${myCount>0?`
-     <div class="tile w" style="display:flex;justify-content:space-between;align-items:center">
-       <div>
-         <div class="t-lbl">🔭 Your Sightings</div>
-         <div class="t-val">Detected <strong>${myCount}</strong> time${myCount===1?'':'s'}</div>
-       </div>
-       <div style="text-align:right">
-         <div class="t-lbl">Best Confidence</div>
-         <div class="t-val" style="color:var(--gold2)">${myBest}%</div>
-       </div>
+     ${callHtml}
+
+     ${myCount>0?`<div class="tile w" style="display:flex;justify-content:space-between;align-items:center">
+       <div><div class="t-lbl">🔭 Your Sightings</div>
+         <div class="t-val">Detected <strong>${myCount}</strong> time${myCount===1?'':'s'}</div></div>
+       <div style="text-align:right"><div class="t-lbl">Best Confidence</div>
+         <div class="t-val" style="color:var(--gold2)">${myBest}%</div></div>
      </div>`:''}
 
      ${tiles?`<div class="grid">${tiles}</div>`:''}
@@ -830,28 +1072,25 @@ function renderInfo(lbl,inat,wiki) {
        ${wikiUrl?`<a href="${esc(wikiUrl)}" target="_blank" class="f-link">Read full article on Wikipedia →</a>`:''}
      </div>`:''}
 
-     <button class="btn ghost" style="margin-top:4px"
-       onclick="show('${infoFromScreen}')">← Back</button>`;
+     <button class="btn ghost" style="margin-top:4px" onclick="goTab('${infoFromTab}')">← Back</button>`;
 }
 
 function mkTile(w,lbl,val){
   return `<div class="tile${w?' '+w:''}"><div class="t-lbl">${lbl}</div><div class="t-val">${val}</div></div>`;
 }
-
 function parseLifespan(t){
   const ps=[/lives?(?:\s+for)?\s+(?:up to\s+)?(\d+(?:[–\-]\d+)?)\s+years?/i,
     /lifespan(?:\s+of)?\s+(?:up to\s+)?(\d+(?:[–\-]\d+)?)\s+years?/i,
     /(?:can|may)\s+live\s+(?:up to\s+)?(\d+)\s+years?/i,
     /(?:up to\s+)?(\d+)\s+years?\s+(?:in the wild|in captivity)/i];
-  for(const p of ps){const m=t.match(p);if(m)return m[1]+' years';}
-  return null;
+  for(const p of ps){const m=t.match(p);if(m)return m[1]+' years';}return null;
 }
 function parseMigration(t){
-  if(/long[- ]distance\s+migrat/i.test(t)) return{e:'🌍',txt:'Long-distance migrant'};
-  if(/partial\s+migrat/i.test(t))           return{e:'↕️',txt:'Partial migrant'};
-  if(/migrat(?:ory|es|ion)/i.test(t))        return{e:'✈️',txt:'Migratory'};
-  if(/winter\s+visitor|wintering/i.test(t))  return{e:'❄️',txt:'Winter visitor'};
-  if(/year[- ]round|sedentary|resident/i.test(t)) return{e:'🏡',txt:'Year-round resident'};
+  if(/long[- ]distance\s+migrat/i.test(t))return{e:'🌍',txt:'Long-distance migrant'};
+  if(/partial\s+migrat/i.test(t))return{e:'↕️',txt:'Partial migrant'};
+  if(/migrat(?:ory|es|ion)/i.test(t))return{e:'✈️',txt:'Migratory'};
+  if(/winter\s+visitor|wintering/i.test(t))return{e:'❄️',txt:'Winter visitor'};
+  if(/year[- ]round|sedentary|resident/i.test(t))return{e:'🏡',txt:'Year-round resident'};
   return null;
 }
 function parseDiet(t){
@@ -863,27 +1102,24 @@ function parseHabitat(t){
   return m?uc(m[1].trim().replace(/\.$/,'')):null;
 }
 function parseWingspan(t){
-  const m=t.match(/wingspan\s+of\s+(\d+(?:[–\-]\d+)?\s*cm)/i)
-          ||t.match(/(\d+(?:[–\-]\d+)?\s*cm)\s+wingspan/i);
+  const m=t.match(/wingspan\s+of\s+(\d+(?:[–\-]\d+)?\s*cm)/i)||t.match(/(\d+(?:[–\-]\d+)?\s*cm)\s+wingspan/i);
   return m?m[1]:null;
 }
 
-/* ═══════════════════════════════════════════════
+/* ════════════════════════════════════════════════
    SPECTROGRAM + WAVEFORM
-═══════════════════════════════════════════════ */
+════════════════════════════════════════════════ */
 function setupCanvases(){
-  const sc=document.getElementById('specCanvas');
-  const wc=document.getElementById('waveCanvas');
-  sc.width=sc.offsetWidth||390; sc.height=110;
-  wc.width=wc.offsetWidth||390; wc.height=42;
+  const sc=document.getElementById('specCanvas'), wc=document.getElementById('waveCanvas');
+  sc.width=sc.offsetWidth||390; sc.height=108;
+  wc.width=wc.offsetWidth||390; wc.height=40;
   specCtx=sc.getContext('2d'); waveCtx=wc.getContext('2d');
   clearSpec(); idleWave();
 }
 function clearSpec(){
   if(!specCtx)return;
   specCtx.fillStyle='#020702';
-  specCtx.fillRect(0,0,specCtx.canvas.width,specCtx.canvas.height);
-  specX=0;
+  specCtx.fillRect(0,0,specCtx.canvas.width,specCtx.canvas.height); specX=0;
 }
 function startSpecLoop(){
   cancelAnimationFrame(specRaf);
@@ -908,8 +1144,7 @@ function drawSpecCol(d){
     else if(v<.60){const t=(v-.40)/.20;r=Math.round(72-t*34);g=Math.round(57+t*107);b=Math.round(169-t*30);}
     else if(v<.80){const t=(v-.60)/.20;r=Math.round(38+t*157);g=Math.round(164+t*67);b=Math.round(139-t*96);}
     else{const t=(v-.80)/.20;r=Math.round(195+t*58);g=Math.round(231+t*21);b=Math.round(43-t*43);}
-    specCtx.fillStyle=`rgb(${r},${g},${b})`;
-    specCtx.fillRect(specX,row,1,1);
+    specCtx.fillStyle=`rgb(${r},${g},${b})`;specCtx.fillRect(specX,row,1,1);
   }
   specX++;
 }
@@ -937,25 +1172,70 @@ function idleWave(){
   }
 }
 
-/* ═══════════════════════════════════════════════
+/* ════════════════════════════════════════════════
+   SETTINGS UI
+════════════════════════════════════════════════ */
+function applySettings() {
+  document.getElementById('confSlider').value=settings.threshold;
+  document.getElementById('confVal').textContent=settings.threshold+'%';
+  document.getElementById('locToggle').checked=settings.useLocation;
+}
+
+function updateThreshold(val) {
+  settings.threshold=parseInt(val);
+  document.getElementById('confVal').textContent=val+'%';
+  saveSettings();
+}
+
+function toggleLocation(on) {
+  settings.useLocation=on;
+  saveSettings();
+  const st=document.getElementById('locStatus');
+  if (on && listening) startLocation();
+  else if (!on) { stopLocation(); currentLoc=null; }
+  if(st) st.style.display=on?'flex':'none';
+}
+
+async function checkUpdate() {
+  if (!confirm('This will clear the cached model and re-download the latest version (~52 MB).\n\nContinue?')) return;
+  try {
+    const c=await caches.open(CACHE_KEY);
+    await c.delete(MODEL_URL);
+    await c.delete(LABELS_URL);
+    alert('Cache cleared. The app will now reload and download the latest model.');
+    location.reload();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+function clearAllData() {
+  if (!confirm('Delete all detection history? This cannot be undone.')) return;
+  localStorage.removeItem(HIST_KEY);
+  document.getElementById('histCount').textContent='0';
+  alert('History cleared.');
+}
+
+/* ════════════════════════════════════════════════
    NAVIGATION
-═══════════════════════════════════════════════ */
-function show(id){
+════════════════════════════════════════════════ */
+function show(id) {
   document.querySelectorAll('.scr').forEach(s=>s.classList.add('off'));
   document.getElementById(id).classList.remove('off');
 }
-function goTab(id){
-  if(id==='ST') renderStats();
+
+function goTab(id) {
   show(id);
-  // sync both tab bars
-  document.querySelectorAll('.tab-btn').forEach(b=>{
-    b.classList.remove('act');
-    if((id==='LI'&&(b.id==='tab-li'||b.id==='tab-li2'))
-     ||(id==='ST'&&(b.id==='tab-st'||b.id==='tab-st2')))
-      b.classList.add('act');
-  });
+  document.querySelectorAll('.tb').forEach(b=>b.classList.toggle('act', b.dataset.tab===id));
+  if (id==='ST') renderStats();
+  if (id==='MA') renderMap();
+  if (id==='SE') {
+    applySettings();
+    document.getElementById('histCount').textContent=loadHistory().length;
+    const st=document.getElementById('locStatus');
+    if(st) st.style.display=settings.useLocation&&currentLoc?'flex':'none';
+  }
 }
-function setListenUI(on){
+
+function setListenUI(on) {
   const btn=document.getElementById('listenBtn');
   const lbl=document.getElementById('statusLbl');
   btn.textContent=on?'■ Stop':'🎙 Start';
@@ -963,6 +1243,10 @@ function setListenUI(on){
   lbl.textContent=on?'● Listening for birds…':'Tap Start to identify birds';
   lbl.classList.toggle('on',on);
 }
+
+/* ════════════════════════════════════════════════
+   BOOT HELPERS
+════════════════════════════════════════════════ */
 function setStep(n,done){
   ['st1','st2','st3'].forEach((id,i)=>{
     const el=document.getElementById(id);
@@ -978,22 +1262,14 @@ function showErr(ttl,msg){
   document.getElementById('errMsg').textContent=msg;
   show('ER');
 }
-function showAbout(){
-  alert('Aviara — Free AI Bird Song Identifier\n\n'
-    +'• BirdNET by Cornell Lab & TU Chemnitz (6 500+ species)\n'
-    +'• Runs entirely on your device — nothing is uploaded\n'
-    +'• Detection history saved on your device\n'
-    +'• Export detections as CSV from the Stats tab\n'
-    +'• Bird info from iNaturalist & Wikipedia (free)');
-}
 
-/* ═══════════════════════════════════════════════
+/* ════════════════════════════════════════════════
    CACHE
-═══════════════════════════════════════════════ */
+════════════════════════════════════════════════ */
 async function cacheGet(url,type){
   try{
-    const c=await caches.open(CACHE_KEY);
-    const r=await c.match(url); if(!r)return null;
+    const c=await caches.open(CACHE_KEY), r=await c.match(url);
+    if(!r)return null;
     return type==='buffer'?r.arrayBuffer():r.text();
   }catch(e){return null;}
 }
@@ -1005,9 +1281,9 @@ async function cachePut(url,data,mime){
   }catch(e){}
 }
 
-/* ═══════════════════════════════════════════════
+/* ════════════════════════════════════════════════
    UTILS
-═══════════════════════════════════════════════ */
+════════════════════════════════════════════════ */
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const uc=s=>s.charAt(0).toUpperCase()+s.slice(1);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
