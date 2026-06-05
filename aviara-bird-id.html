@@ -1,0 +1,1558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Aviara">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#050C05">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/svg+xml" href="./icon.svg">
+<title>Aviara · Bird ID</title>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Crimson+Pro:ital,wght@0,300;0,400;0,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#050C05;--srf:#091409;--card:#0D1A0D;--elev:#132213;
+  --gold:#C8972A;--gold2:#E8B84B;--gold3:rgba(200,151,42,0.12);
+  --sage:#3A6647;--sage2:#57966A;
+  --red:#E05050;--red2:rgba(224,80,80,0.14);
+  --t1:#EFE5C5;--t2:#A59778;--t3:#5A5038;
+  --bdr:rgba(200,151,42,0.14);--bdr2:rgba(255,255,255,0.04);
+  --tab:54px;--r:14px;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;height:-webkit-fill-available}
+body{font-family:'Crimson Pro',Georgia,serif;background:var(--bg);color:var(--t1);overflow:hidden}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 90% 55% at 10% 5%,rgba(50,100,60,.10) 0%,transparent 60%),
+             radial-gradient(ellipse 70% 45% at 90% 95%,rgba(200,151,42,.05) 0%,transparent 55%)}
+
+/* ── screens ── */
+.scr{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;
+  transition:opacity .28s,transform .28s;will-change:opacity,transform}
+.scr.off{opacity:0;pointer-events:none;transform:translateY(12px)}
+
+/* ── tab bar ── */
+.tbar{position:fixed;bottom:0;left:0;right:0;z-index:30;
+  height:calc(var(--tab) + env(safe-area-inset-bottom));
+  background:rgba(5,12,5,0.96);border-top:1px solid var(--bdr);
+  display:flex;align-items:stretch;backdrop-filter:blur(12px)}
+.tb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;cursor:pointer;touch-action:manipulation;padding-bottom:env(safe-area-inset-bottom)}
+.tb .ti{font-size:20px;line-height:1;transition:filter .2s,transform .2s}
+.tb .tl{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;transition:color .2s}
+.tb.act .tl{color:var(--gold)}
+.tb.act .ti{filter:drop-shadow(0 0 6px rgba(200,151,42,.65));transform:scale(1.05)}
+
+/* ── topbar ── */
+.topbar{display:flex;justify-content:space-between;align-items:center;width:100%;
+  padding:10px 16px;padding-top:max(10px,env(safe-area-inset-top) + 4px);flex-shrink:0}
+.toplogo{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--gold);
+  display:flex;align-items:center;gap:7px}
+.icobtn{background:var(--elev);border:1px solid var(--bdr);border-radius:10px;
+  width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;font-size:15px;touch-action:manipulation;transition:background .15s}
+.icobtn:active{background:var(--card)}
+
+/* ══ LOAD ══════════════════════════════════════ */
+#LD{justify-content:center;padding:28px 22px}
+.ld-bird{font-size:70px;margin-bottom:18px;
+  filter:drop-shadow(0 0 24px rgba(200,151,42,.5));animation:float 2.8s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+.ld-logo{font-family:'Playfair Display',serif;font-size:44px;font-weight:700;
+  color:var(--gold);letter-spacing:-1px;margin-bottom:4px}
+.ld-tag{font-size:15px;color:var(--t2);font-style:italic;margin-bottom:44px}
+.ld-card{background:var(--card);border:1px solid var(--bdr);border-radius:20px;
+  padding:24px 22px;width:100%;max-width:370px}
+.ld-step{display:flex;align-items:center;gap:10px;font-size:13px;
+  color:var(--t3);margin-bottom:11px;transition:color .3s}
+.ld-step.on{color:var(--t1)}.ld-step.ok{color:var(--sage2)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--t3);flex-shrink:0;transition:background .3s}
+.ld-step.on .dot{background:var(--gold);animation:pdot .7s ease-in-out infinite}
+.ld-step.ok .dot{background:var(--sage2)}
+@keyframes pdot{0%,100%{transform:scale(1)}50%{transform:scale(2.2)}}
+.prog-track{background:var(--elev);border-radius:99px;height:5px;overflow:hidden;margin:16px 0 14px}
+.prog-fill{height:100%;border-radius:99px;
+  background:linear-gradient(90deg,var(--sage2),var(--gold2));width:2%;transition:width .5s ease}
+.ld-note{font-size:11px;color:var(--t3);font-style:italic;line-height:1.6}
+
+/* ══ LISTEN ════════════════════════════════════ */
+#LI{padding:0;justify-content:flex-start;
+  padding-bottom:calc(var(--tab) + env(safe-area-inset-bottom))}
+
+/* spectrogram */
+.spec-wrap{width:100%;position:relative;flex-shrink:0;
+  background:var(--srf);border-bottom:1px solid var(--bdr)}
+#specCanvas{width:100%;height:112px;display:block}
+.spec-lbl{position:absolute;top:5px;left:9px;font-size:8px;
+  color:rgba(200,151,42,.38);text-transform:uppercase;letter-spacing:1.6px}
+.freq-axis{position:absolute;right:6px;top:0;bottom:0;display:flex;flex-direction:column;
+  justify-content:space-between;padding:5px 0;font-size:8px;color:rgba(200,151,42,.25)}
+
+/* waveform */
+.wave-wrap{width:100%;height:46px;flex-shrink:0;padding:2px 0;
+  background:var(--srf);border-bottom:1px solid var(--bdr2)}
+#waveCanvas{width:100%;height:100%}
+
+/* controls */
+.ctrls{display:flex;align-items:center;gap:12px;
+  padding:10px 16px 8px;flex-shrink:0;width:100%}
+.status-area{flex:1;min-width:0}
+#statusLbl{font-size:11px;color:var(--t2);text-transform:uppercase;
+  letter-spacing:1.6px;display:flex;align-items:center;gap:6px}
+#statusLbl .dot-pulse{width:6px;height:6px;border-radius:50%;
+  background:var(--gold2);animation:blink 1s ease-in-out infinite;flex-shrink:0}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+#statusLbl .dot-stop{width:6px;height:6px;border-radius:1px;
+  background:var(--red);flex-shrink:0}
+
+/* start/stop button — distinct states */
+#listenBtn{border:none;border-radius:99px;padding:12px 22px;
+  font-family:'Playfair Display',serif;font-size:15px;font-weight:700;
+  letter-spacing:.3px;cursor:pointer;white-space:nowrap;touch-action:manipulation;
+  transition:all .22s;flex-shrink:0}
+#listenBtn.idle{background:var(--gold);color:var(--bg);
+  box-shadow:0 4px 18px rgba(200,151,42,.30)}
+#listenBtn.idle:active{transform:scale(.93);opacity:.84}
+#listenBtn.recording{background:var(--red2);color:var(--red);
+  border:1.5px solid rgba(224,80,80,.6);
+  box-shadow:0 0 14px rgba(224,80,80,.15);
+  animation:recordPulse 2s ease-in-out infinite}
+@keyframes recordPulse{0%,100%{box-shadow:0 0 14px rgba(224,80,80,.15)}
+  50%{box-shadow:0 0 22px rgba(224,80,80,.30)}}
+#listenBtn.recording:active{transform:scale(.93)}
+#listenBtn.stopped{background:var(--elev);color:var(--t2);border:1.5px solid var(--bdr)}
+#listenBtn.stopped:active{transform:scale(.93)}
+
+/* location pill */
+.loc-pill{font-size:11px;color:var(--sage2);padding:3px 14px;
+  background:rgba(58,102,71,.15);border-radius:99px;
+  margin:0 16px 6px;align-self:flex-start;flex-shrink:0;display:none}
+
+/* feed */
+.feed-bar{display:flex;justify-content:space-between;align-items:center;
+  width:100%;padding:5px 16px 4px;flex-shrink:0}
+.feed-ttl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1.6px}
+.feed-clr{font-size:11px;color:var(--t3);cursor:pointer;touch-action:manipulation;padding:4px}
+
+#feed{flex:1;overflow-y:auto;width:100%;padding:0 12px;
+  -webkit-overflow-scrolling:touch}
+.empty{text-align:center;padding:32px 20px;color:var(--t3);font-style:italic;
+  font-size:15px;line-height:1.75}
+
+/* detection card */
+.det{display:flex;justify-content:space-between;align-items:center;
+  background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);
+  padding:11px 13px;margin-bottom:8px;cursor:pointer;touch-action:manipulation;
+  transition:background .15s;animation:slideIn .28s ease}
+.det:active{background:var(--elev)}
+@keyframes slideIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.det-l{min-width:0;flex:1}
+.det-top{display:flex;align-items:center;gap:7px;margin-bottom:2px;flex-wrap:wrap}
+.det-name{font-size:17px;color:var(--t1);line-height:1.2;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.det-sci{font-size:11px;color:var(--t3);font-style:italic;margin-bottom:2px}
+.det-loc{font-size:10px;color:var(--sage2)}
+.det-bar{height:3px;border-radius:99px;background:var(--elev);margin-top:6px;overflow:hidden}
+.det-bar-fill{height:100%;border-radius:99px;transition:width .4s}
+.det-r{text-align:right;flex-shrink:0;margin-left:10px}
+.det-pct{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;line-height:1;margin-bottom:2px}
+.det-t{font-size:10px;color:var(--t3)}
+.hi{color:var(--gold2)}.md{color:var(--sage2)}.lo{color:var(--t2)}
+
+/* conservation mini-badge — on detection cards */
+.cs-mini{display:none;padding:2px 6px;border-radius:5px;font-size:8px;
+  font-weight:800;letter-spacing:.5px;white-space:nowrap;flex-shrink:0;
+  vertical-align:middle;line-height:1.4}
+.cs-mini.show{display:inline-block}
+/* colours reuse full badge classes */
+.lc{background:rgba(39,174,96,.88);color:#fff}
+.nt{background:rgba(243,156,18,.88);color:#fff}
+.vu{background:rgba(230,126,34,.88);color:#fff}
+.en{background:rgba(231,76,60,.88);color:#fff}
+.cr{background:rgba(155,35,24,.95);color:#fff}
+.dd{background:rgba(90,90,90,.88);color:#fff}
+
+/* ══ STATS ══════════════════════════════════════ */
+#ST{padding:0;justify-content:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding-bottom:calc(var(--tab) + env(safe-area-inset-bottom))}
+.st-header{display:flex;justify-content:space-between;align-items:center;width:100%;
+  padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top)+6px);flex-shrink:0}
+.st-title{font-family:'Playfair Display',serif;font-size:22px;font-weight:700}
+.exp-btn{display:flex;align-items:center;gap:5px;background:var(--elev);
+  border:1px solid var(--bdr);border-radius:10px;padding:7px 11px;
+  cursor:pointer;touch-action:manipulation;font-size:12px;color:var(--gold);
+  font-family:'Crimson Pro',serif;transition:background .15s}
+.exp-btn:active{background:var(--card)}
+.st-body{width:100%;padding:0 14px 16px;display:flex;flex-direction:column;
+  gap:14px;max-width:450px;margin:0 auto}
+.sum-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.sum-pill{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);
+  padding:12px 8px;text-align:center}
+.sum-n{font-family:'Playfair Display',serif;font-size:26px;font-weight:700;color:var(--gold)}
+.sum-l{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+.sec-head{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1.6px;margin-bottom:-4px}
+.vis-card{display:flex;align-items:center;gap:11px;background:var(--card);
+  border:1px solid var(--bdr);border-radius:var(--r);padding:12px 13px;
+  cursor:pointer;touch-action:manipulation;transition:background .15s}
+.vis-card:active{background:var(--elev)}
+.vis-rank{font-family:'Playfair Display',serif;font-size:18px;font-weight:700;
+  width:26px;text-align:center;flex-shrink:0}
+.rk1{color:#FFD700}.rk2{color:#C0C0C0}.rk3{color:#CD7F32}.rk_{color:var(--t3)}
+.vis-info{flex:1;min-width:0}
+.vis-name{font-size:15px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vis-sci{font-size:11px;color:var(--t3);font-style:italic;margin-top:1px}
+.vis-bw{height:3px;background:var(--elev);border-radius:99px;margin-top:5px;overflow:hidden}
+.vis-bf{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--sage2),var(--gold))}
+.vis-ct{text-align:right;flex-shrink:0}
+.vis-n{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:var(--gold2)}
+.vis-s{font-size:10px;color:var(--t3);margin-top:1px}
+.hist-wrap{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);overflow:hidden}
+.hist-item{display:flex;justify-content:space-between;align-items:center;
+  padding:9px 13px;border-bottom:1px solid rgba(200,151,42,.07);
+  cursor:pointer;touch-action:manipulation;transition:background .12s}
+.hist-item:last-child{border-bottom:none}
+.hist-item:active{background:var(--elev)}
+.hist-l{display:flex;align-items:center;gap:7px;min-width:0}
+.hist-info{min-width:0}
+.hist-name{font-size:15px;color:var(--t1)}
+.hist-sci{font-size:10px;color:var(--t3);font-style:italic;margin-top:1px}
+.hist-loc{font-size:10px;color:var(--sage2);margin-top:1px}
+.hist-r{text-align:right;flex-shrink:0;margin-left:10px}
+.hist-pct{font-size:13px;font-weight:600}
+.hist-time{font-size:10px;color:var(--t3);margin-top:1px}
+
+/* ══ MAP ════════════════════════════════════════ */
+#MA{padding:0;justify-content:flex-start;
+  padding-bottom:calc(var(--tab) + env(safe-area-inset-bottom))}
+#mapDiv{flex:1;width:100%;min-height:0}
+.no-loc-msg{flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:10px;color:var(--t3);font-style:italic;
+  font-size:15px;text-align:center;padding:0 40px;line-height:1.65}
+.no-loc-msg .big{font-size:44px;font-style:normal}
+
+/* ══ SETTINGS ══════════════════════════════════ */
+#SE{padding:0;justify-content:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding-bottom:calc(var(--tab) + env(safe-area-inset-bottom))}
+.se-body{width:100%;padding:0 14px 20px;display:flex;flex-direction:column;
+  gap:16px;max-width:450px;margin:0 auto}
+.se-sec{font-size:10px;color:var(--t3);text-transform:uppercase;
+  letter-spacing:1.6px;padding-top:4px}
+.se-card{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);overflow:hidden}
+.se-row{display:flex;justify-content:space-between;align-items:center;padding:14px 16px}
+.se-row+.se-row,.se-row+.slider-wrap,.slider-wrap+.slider-hint,
+.slider-hint+.se-row{border-top:1px solid rgba(200,151,42,.07)}
+.se-lbl{font-size:14px;color:var(--t1);margin-bottom:2px}
+.se-sub{font-size:11px;color:var(--t3);line-height:1.45}
+.se-val{font-size:13px;color:var(--gold2)}
+.se-tag{font-size:10px;color:var(--sage2);background:rgba(87,150,106,.15);
+  border-radius:6px;padding:3px 8px}
+.slider-wrap{padding:6px 16px 12px}
+.slider{-webkit-appearance:none;width:100%;height:4px;border-radius:99px;
+  background:var(--elev);outline:none}
+.slider::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;
+  border-radius:50%;background:var(--gold);cursor:pointer;
+  box-shadow:0 2px 8px rgba(200,151,42,.4)}
+.slider-labels{display:flex;justify-content:space-between;
+  padding:0 16px 8px;font-size:11px;color:var(--t3)}
+.slider-hint{padding:0 16px 12px;font-size:11px;color:var(--t3);font-style:italic;line-height:1.5}
+.toggle{position:relative;width:46px;height:27px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.tog-sl{position:absolute;inset:0;background:var(--elev);border-radius:99px;
+  transition:background .3s;border:1px solid var(--bdr);cursor:pointer}
+.tog-sl::before{content:'';position:absolute;width:21px;height:21px;
+  left:2px;top:2px;background:var(--t3);border-radius:50%;
+  transition:transform .3s,background .3s}
+input:checked+.tog-sl{background:var(--gold);border-color:var(--gold)}
+input:checked+.tog-sl::before{transform:translateX(19px);background:white}
+.se-btn{display:block;width:calc(100% - 32px);margin:0 16px 14px;
+  border-radius:10px;padding:12px;font-family:'Crimson Pro',serif;
+  font-size:14px;cursor:pointer;text-align:center;transition:background .15s;
+  touch-action:manipulation}
+.upd-btn{background:var(--elev);border:1px solid var(--bdr);color:var(--t1)}
+.upd-btn:active{background:var(--bg)}
+.danger-btn{background:transparent;border:1px solid rgba(190,55,45,.3);color:rgba(231,76,60,.75)}
+.about-card{padding:14px 16px;font-size:13px;color:var(--t3);line-height:1.85}
+
+/* ══ INFO ════════════════════════════════════════ */
+#IN{justify-content:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.info-hdr{display:flex;align-items:center;gap:12px;width:100%;
+  padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top)+6px);
+  flex-shrink:0;position:sticky;top:0;z-index:5;
+  background:linear-gradient(var(--bg) 82%,transparent)}
+.info-hdr-lbl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1.8px}
+#infoBody{width:100%;padding:0 14px;
+  padding-bottom:max(32px,env(safe-area-inset-bottom)+20px);
+  display:flex;flex-direction:column;gap:12px;max-width:450px;margin:0 auto}
+
+/* info photo */
+.photo-wrap{width:100%;border-radius:18px;overflow:hidden;
+  position:relative;aspect-ratio:4/3;background:var(--elev)}
+.photo-wrap img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:90px}
+.cs-badge{padding:5px 11px;border-radius:20px;font-size:10px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.6px;display:inline-block}
+.cs-badge.abs{position:absolute;top:11px;right:11px;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+
+/* info cards */
+.name-card{background:var(--card);border:1px solid var(--bdr);border-radius:18px;padding:18px}
+.c-name{font-family:'Playfair Display',serif;font-size:30px;font-weight:700;line-height:1.1;margin-bottom:4px}
+.s-name{font-size:16px;color:var(--gold);font-style:italic;margin-bottom:5px}
+.desc-row{font-size:13px;color:var(--t3);line-height:1.45}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.tile{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);padding:13px 12px}
+.tile.w{grid-column:1/-1}
+.t-lbl{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1.6px;margin-bottom:5px}
+.t-val{font-size:13px;color:var(--t1);line-height:1.45}
+.fact{background:linear-gradient(135deg,var(--elev),var(--card));
+  border:1px solid rgba(200,151,42,.18);border-radius:18px;padding:18px}
+.f-lbl{font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px}
+.f-txt{font-size:15px;color:var(--t1);line-height:1.65;font-style:italic}
+.f-link{display:block;margin-top:12px;font-size:13px;color:var(--gold);text-decoration:none;font-style:normal}
+.call-card{background:var(--card);border:1px solid var(--bdr);border-radius:18px;padding:18px}
+.call-credit{font-size:11px;color:var(--t3);margin-top:8px;line-height:1.5}
+.xc-link{display:block;padding:13px 16px;background:var(--elev);border:1px solid var(--bdr);
+  border-radius:12px;color:var(--gold);text-decoration:none;font-size:14px;
+  text-align:center;touch-action:manipulation;transition:background .15s}
+.xc-link:active{background:var(--bg)}
+
+/* shared button */
+.btn{width:100%;background:var(--gold);border:none;border-radius:var(--r);padding:14px;
+  color:var(--bg);font-family:'Playfair Display',serif;font-size:15px;font-weight:700;
+  letter-spacing:.3px;cursor:pointer;transition:all .18s;touch-action:manipulation}
+.btn:active{transform:scale(.96);opacity:.86}
+.btn.ghost{background:transparent;border:1.5px solid var(--gold);color:var(--gold)}
+
+/* ══ ERROR ═════════════════════════════════════ */
+#ER{justify-content:center;padding:24px}
+.err-box{background:var(--card);border:1px solid rgba(190,55,45,.28);
+  border-radius:20px;padding:28px 22px;text-align:center;max-width:360px;width:100%}
+.err-ico{font-size:48px;margin-bottom:14px}
+.err-ttl{font-family:'Playfair Display',serif;font-size:22px;margin-bottom:8px}
+.err-msg{font-size:13px;color:var(--t2);margin-bottom:22px;line-height:1.65;
+  text-align:left;word-break:break-word}
+.err-alt{display:block;margin-top:12px;font-size:12px;color:var(--t3);text-decoration:none}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+::-webkit-scrollbar{width:0}
+</style>
+</head>
+<body>
+
+<!-- ══ LOAD ══════════════════════════════════════ -->
+<div id="LD" class="scr">
+  <div class="ld-bird">🦉</div>
+  <div class="ld-logo">Aviara</div>
+  <div class="ld-tag">Free · Offline · AI Bird Song Identifier</div>
+  <div class="ld-card">
+    <div class="ld-step" id="st1"><div class="dot"></div><span>Loading species database…</span></div>
+    <div class="ld-step" id="st2"><div class="dot"></div><span id="st2txt">Downloading BirdNET model (one-time ~52 MB)…</span></div>
+    <div class="ld-step" id="st3"><div class="dot"></div><span>Starting AI engine…</span></div>
+    <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+    <div class="ld-note">
+      BirdNET downloads <strong>once</strong> and is saved on your device.
+      Works completely <strong>offline</strong> after that — no account, no cost, ever.
+    </div>
+  </div>
+</div>
+
+<!-- ══ LISTEN ════════════════════════════════════ -->
+<div id="LI" class="scr off">
+  <div class="topbar">
+    <div class="toplogo">🪶 Aviara</div>
+    <div class="icobtn" onclick="goTab('SE')">⚙️</div>
+  </div>
+  <div class="spec-wrap">
+    <canvas id="specCanvas"></canvas>
+    <div class="spec-lbl">Spectrogram · 400 – 10 000 Hz</div>
+    <div class="freq-axis"><span>10k</span><span>5k</span><span>2k</span><span>400</span></div>
+  </div>
+  <div class="wave-wrap"><canvas id="waveCanvas"></canvas></div>
+  <div class="ctrls">
+    <div class="status-area">
+      <div id="statusLbl"><span id="statusTxt">Tap Start to identify birds</span></div>
+    </div>
+    <button id="listenBtn" class="idle" onclick="toggleListen()">🎙 Start</button>
+  </div>
+  <div class="loc-pill" id="locPill">📍 <span id="locText">Getting location…</span></div>
+  <div class="feed-bar">
+    <div class="feed-ttl">🐦 This Session</div>
+    <div class="feed-clr" onclick="clearFeed()">Clear</div>
+  </div>
+  <div id="feed">
+    <div class="empty" id="emptyState">
+      Press <strong>Start</strong>, hold your phone near a bird sound.<br>
+      Tap any result for full field notes.
+    </div>
+  </div>
+  <div class="tbar">
+    <div class="tb act" data-tab="LI" onclick="goTab('LI')"><span class="ti">🎙</span><span class="tl">Listen</span></div>
+    <div class="tb" data-tab="ST" onclick="goTab('ST')"><span class="ti">📊</span><span class="tl">Stats</span></div>
+    <div class="tb" data-tab="MA" onclick="goTab('MA')"><span class="ti">🗺</span><span class="tl">Map</span></div>
+    <div class="tb" data-tab="SE" onclick="goTab('SE')"><span class="ti">⚙️</span><span class="tl">Settings</span></div>
+  </div>
+</div>
+
+<!-- ══ STATS ═════════════════════════════════════ -->
+<div id="ST" class="scr off">
+  <div class="st-header">
+    <div class="st-title">My Birds</div>
+    <div class="exp-btn" onclick="exportCSV()">⬇ Export CSV</div>
+  </div>
+  <div class="st-body" id="stBody"></div>
+  <div class="tbar">
+    <div class="tb" data-tab="LI" onclick="goTab('LI')"><span class="ti">🎙</span><span class="tl">Listen</span></div>
+    <div class="tb act" data-tab="ST" onclick="goTab('ST')"><span class="ti">📊</span><span class="tl">Stats</span></div>
+    <div class="tb" data-tab="MA" onclick="goTab('MA')"><span class="ti">🗺</span><span class="tl">Map</span></div>
+    <div class="tb" data-tab="SE" onclick="goTab('SE')"><span class="ti">⚙️</span><span class="tl">Settings</span></div>
+  </div>
+</div>
+
+<!-- ══ MAP ═══════════════════════════════════════ -->
+<div id="MA" class="scr off">
+  <div class="topbar">
+    <div class="toplogo">🗺 Detection Map</div>
+    <div class="icobtn" onclick="renderMap()">↺</div>
+  </div>
+  <div id="mapDiv"></div>
+  <div id="noLocMsg" class="no-loc-msg" style="display:none">
+    <span class="big">📍</span>
+    <span>No location data yet</span>
+    <span>Enable location in ⚙️ Settings, then start listening</span>
+  </div>
+  <div class="tbar">
+    <div class="tb" data-tab="LI" onclick="goTab('LI')"><span class="ti">🎙</span><span class="tl">Listen</span></div>
+    <div class="tb" data-tab="ST" onclick="goTab('ST')"><span class="ti">📊</span><span class="tl">Stats</span></div>
+    <div class="tb act" data-tab="MA" onclick="goTab('MA')"><span class="ti">🗺</span><span class="tl">Map</span></div>
+    <div class="tb" data-tab="SE" onclick="goTab('SE')"><span class="ti">⚙️</span><span class="tl">Settings</span></div>
+  </div>
+</div>
+
+<!-- ══ SETTINGS ══════════════════════════════════ -->
+<div id="SE" class="scr off">
+  <div class="topbar"><div class="toplogo">⚙️ Settings</div></div>
+  <div class="se-body">
+
+    <div class="se-sec">🧠 AI Model</div>
+    <div class="se-card">
+      <div class="se-row">
+        <div><div class="se-lbl">BirdNET V2.4</div><div class="se-sub">6,500+ species worldwide · Cornell Lab & TU Chemnitz</div></div>
+        <span class="se-tag">Active</span>
+      </div>
+      <div class="se-row" style="padding-top:6px;padding-bottom:6px">
+        <div class="se-sub">Clear the cache to download the latest BirdNET version when one is released</div>
+      </div>
+      <button class="se-btn upd-btn" onclick="checkUpdate()">🔄 Check for Update & Re-download</button>
+    </div>
+
+    <div class="se-sec">🎯 Detection Sensitivity</div>
+    <div class="se-card">
+      <div class="slider-labels">
+        <span>Fewer (high confidence only)</span>
+        <span id="confVal" style="color:var(--gold2);font-family:'Playfair Display',serif;font-size:16px;font-weight:700">12%</span>
+        <span>More (includes uncertain)</span>
+      </div>
+      <div class="slider-wrap">
+        <input type="range" class="slider" min="5" max="60" value="12"
+          id="confSlider" oninput="updateThreshold(this.value)">
+      </div>
+      <div class="slider-hint">This is the minimum confidence score for a detection to appear in the feed.</div>
+    </div>
+
+    <div class="se-sec">📍 Location</div>
+    <div class="se-card">
+      <div class="se-row">
+        <div><div class="se-lbl">Tag detections with GPS</div>
+          <div class="se-sub">Saves place name & coordinates with each bird detected</div></div>
+        <label class="toggle">
+          <input type="checkbox" id="locToggle" onchange="toggleLocation(this.checked)">
+          <span class="tog-sl"></span>
+        </label>
+      </div>
+      <div class="se-row" id="locStatus" style="display:none">
+        <div class="se-sub" id="locStatusTxt" style="color:var(--sage2)">📍 Location ready</div>
+      </div>
+    </div>
+
+    <div class="se-sec">📱 Background Listening</div>
+    <div class="se-card">
+      <div class="se-row">
+        <div>
+          <div class="se-lbl">Keep screen on while listening</div>
+          <div class="se-sub">Prevents the screen from auto-locking during a session</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="wakeToggle" onchange="toggleWakeLock(this.checked)" checked>
+          <span class="tog-sl"></span>
+        </label>
+      </div>
+      <div class="se-row" style="padding-top:8px;padding-bottom:8px">
+        <div class="se-sub">
+          The app will keep listening even if you switch apps briefly. For full background operation,
+          leave the screen on by enabling "Keep screen on" above.
+        </div>
+      </div>
+    </div>
+
+    <div class="se-sec">📁 Your Data</div>
+    <div class="se-card">
+      <div class="se-row">
+        <div class="se-lbl">Detections saved</div>
+        <div class="se-val" id="histCount">0</div>
+      </div>
+      <button class="se-btn danger-btn" onclick="clearAllData()">🗑 Clear All Detection History</button>
+    </div>
+
+    <div class="se-sec">ℹ️ About</div>
+    <div class="se-card">
+      <div class="about-card">
+        <div>🧠 BirdNET AI by Cornell Lab & TU Chemnitz</div>
+        <div>📖 Bird info from iNaturalist & Wikipedia</div>
+        <div>🎵 Bird calls from xeno-canto</div>
+        <div>🗺 Maps from OpenStreetMap via Leaflet</div>
+        <div style="margin-top:10px;color:var(--gold)">
+          100% free · No account · AI runs on your device
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="tbar">
+    <div class="tb" data-tab="LI" onclick="goTab('LI')"><span class="ti">🎙</span><span class="tl">Listen</span></div>
+    <div class="tb" data-tab="ST" onclick="goTab('ST')"><span class="ti">📊</span><span class="tl">Stats</span></div>
+    <div class="tb" data-tab="MA" onclick="goTab('MA')"><span class="ti">🗺</span><span class="tl">Map</span></div>
+    <div class="tb act" data-tab="SE" onclick="goTab('SE')"><span class="ti">⚙️</span><span class="tl">Settings</span></div>
+  </div>
+</div>
+
+<!-- ══ INFO ══════════════════════════════════════ -->
+<div id="IN" class="scr off">
+  <div class="info-hdr">
+    <div class="icobtn" id="infoBack">←</div>
+    <div class="info-hdr-lbl">Field Notes</div>
+  </div>
+  <div id="infoBody"></div>
+</div>
+
+<!-- ══ ERROR ═════════════════════════════════════ -->
+<div id="ER" class="scr off">
+  <div class="err-box">
+    <div class="err-ico">⚠️</div>
+    <div class="err-ttl" id="errTtl">Setup failed</div>
+    <div class="err-msg"  id="errMsg"></div>
+    <button class="btn" onclick="location.reload()">↺ Try Again</button>
+    <a class="err-alt" href="https://birdnet-team.github.io/real-time-pwa/" target="_blank">
+      Or use the official BirdNET Live app →
+    </a>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════
+   CONFIG
+════════════════════════════════════════════════ */
+const MODEL_URL  = 'https://huggingface.co/justinchuby/BirdNET-onnx/resolve/main/model.onnx';
+const LABELS_URL = 'https://huggingface.co/justinchuby/BirdNET-onnx/resolve/main/BirdNET_GLOBAL_6K_V2.4_Labels.txt';
+const CACHE_KEY  = 'aviara-v2';
+const HIST_KEY   = 'aviara_history';
+const SETT_KEY   = 'aviara_settings';
+const TARGET_SR  = 48000;
+const CHUNK_SEC  = 3.0;
+const MAX_HIST   = 1000;
+
+/* ════════════════════════════════════════════════
+   IUCN  — global lookup table
+════════════════════════════════════════════════ */
+const IUCN = {
+  EX:{ txt:'Extinct',               cls:'cr' },
+  EW:{ txt:'Extinct in Wild',       cls:'en' },
+  CR:{ txt:'Critically Endangered', cls:'cr' },
+  EN:{ txt:'Endangered',            cls:'en' },
+  VU:{ txt:'Vulnerable',            cls:'vu' },
+  NT:{ txt:'Near Threatened',       cls:'nt' },
+  LC:{ txt:'Least Concern',         cls:'lc' },
+  DD:{ txt:'Data Deficient',        cls:'dd' },
+};
+const IUCN_CODES = new Set(Object.keys(IUCN));
+
+// Conservation status cache — persists for the session
+const csCache = {};  // sci → IUCN code string or ''
+
+/* ════════════════════════════════════════════════
+   SETTINGS
+════════════════════════════════════════════════ */
+const DEF = { threshold:12, useLocation:true, useWakeLock:true };
+let S = (() => {
+  try { return { ...DEF, ...JSON.parse(localStorage.getItem(SETT_KEY)||'{}') }; }
+  catch(e) { return { ...DEF }; }
+})();
+function saveSett() { try { localStorage.setItem(SETT_KEY,JSON.stringify(S)); } catch(e){} }
+
+/* ════════════════════════════════════════════════
+   STATE
+════════════════════════════════════════════════ */
+let ortSession=null, labels=[];
+let audioCtx=null, analyser=null, scriptProc=null, mediaStream=null;
+let silentNode=null;  // keeps AudioContext alive in background
+let listening=false, inferring=false, hasStopped=false;
+let nativeSR=48000;
+let audioBuf=[], bufSecs=0;
+let specCtx=null, waveCtx=null, specX=0, specRAF=null;
+let infoFromTab='LI';
+let currentLoc=null;
+let locInterval=null;
+let wakeLock=null;
+let leafletMap=null, mapLayer=null;
+
+/* ════════════════════════════════════════════════
+   BOOT
+════════════════════════════════════════════════ */
+window.addEventListener('load', async () => {
+  try {
+    ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/';
+    ort.env.wasm.numThreads = 1;
+  } catch(e){}
+
+  try {
+    setStep(1); setProg(5);
+    labels = await loadLabels();
+    setStep(1,true);
+
+    setStep(2); setProg(10);
+    const buf = await downloadModel();
+    setStep(2,true);
+
+    setStep(3); setProg(88);
+    ortSession = await ort.InferenceSession.create(buf,{
+      executionProviders:['wasm'], graphOptimizationLevel:'all'
+    });
+    setStep(3,true); setProg(100);
+
+    await sleep(300);
+    setupCanvases();
+    applySett();
+    show('LI');
+
+    // Resume AudioContext on visibility change (background → foreground)
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState==='visible' && listening) {
+        if (audioCtx?.state==='suspended') await audioCtx.resume();
+        if (S.useWakeLock) requestWakeLock();
+      }
+    });
+
+  } catch(e) {
+    console.error(e);
+    showErr('Setup failed', e.message||String(e));
+  }
+});
+
+/* ════════════════════════════════════════════════
+   LABELS
+════════════════════════════════════════════════ */
+async function loadLabels() {
+  let text = await cacheGet(LABELS_URL,'text');
+  if (!text) {
+    let r;
+    try { r = await fetch(LABELS_URL); }
+    catch(e) { throw new Error('No internet. Connect and reload for the first-time setup.'); }
+    if (!r.ok) throw new Error(`Labels not found (HTTP ${r.status})`);
+    text = await r.text();
+    cachePut(LABELS_URL, text, 'text/plain');
+  }
+  return text.trim().split('\n').map(line => {
+    line = line.trim();
+    const i = line.indexOf('_');
+    if (i<0) return { sci:line, com:line };
+    return { sci:line.slice(0,i), com:line.slice(i+1) };
+  }).filter(l=>l.sci.length>0);
+}
+
+/* ════════════════════════════════════════════════
+   MODEL DOWNLOAD
+════════════════════════════════════════════════ */
+async function downloadModel() {
+  const cached = await cacheGet(MODEL_URL,'buffer');
+  if (cached) {
+    setProg(85);
+    document.getElementById('st2txt').textContent = 'Loading cached model…';
+    return cached;
+  }
+  let res;
+  try { res = await fetch(MODEL_URL); }
+  catch(e) { throw new Error('Cannot reach HuggingFace. Check internet connection.'); }
+  if (!res.ok) throw new Error(`Model download failed (HTTP ${res.status})`);
+  const total = parseInt(res.headers.get('Content-Length')||'0');
+  const reader = res.body.getReader();
+  const parts=[]; let got=0;
+  while(true) {
+    const {done,value} = await reader.read();
+    if(done) break;
+    parts.push(value); got+=value.length;
+    if(total>0) {
+      setProg(10+Math.round(got/total*72));
+      document.getElementById('st2txt').textContent =
+        `Downloading BirdNET… ${(got/1e6).toFixed(1)} / ${(total/1e6).toFixed(1)} MB`;
+    }
+  }
+  const all=new Uint8Array(got); let off=0;
+  for(const p of parts){all.set(p,off);off+=p.length;}
+  cachePut(MODEL_URL, all.buffer, 'application/octet-stream');
+  return all.buffer;
+}
+
+/* ════════════════════════════════════════════════
+   WAKE LOCK  (keeps screen on while listening)
+════════════════════════════════════════════════ */
+async function requestWakeLock() {
+  if (!S.useWakeLock || !('wakeLock' in navigator)) return;
+  try {
+    if (wakeLock) return;
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', ()=>{ wakeLock=null; });
+  } catch(e){}
+}
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release().catch(()=>{}); wakeLock=null; }
+}
+
+/* ════════════════════════════════════════════════
+   SILENT AUDIO NODE  (keeps AudioContext alive when screen dims on iOS)
+════════════════════════════════════════════════ */
+function startSilentNode() {
+  if (!audioCtx || silentNode) return;
+  try {
+    // Oscillator at inaudible volume — keeps iOS audio engine running
+    const osc  = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    gain.gain.value = 0.00001;
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    silentNode = { osc, gain };
+  } catch(e){}
+}
+function stopSilentNode() {
+  if (silentNode) {
+    try { silentNode.osc.stop(); } catch(e){}
+    silentNode=null;
+  }
+}
+
+/* ════════════════════════════════════════════════
+   LOCATION
+════════════════════════════════════════════════ */
+function startLocation() {
+  if (!S.useLocation||!navigator.geolocation) return;
+  fetchLoc();
+  locInterval = setInterval(fetchLoc, 90000);
+}
+function stopLocation() { clearInterval(locInterval); locInterval=null; }
+
+function fetchLoc() {
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const lat=pos.coords.latitude, lon=pos.coords.longitude;
+    currentLoc = { lat, lon, place:'' };
+    try {
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
+        { headers:{'User-Agent':'Aviara Bird ID/1.0'} }
+      );
+      const d = await r.json();
+      const a = d.address||{};
+      currentLoc.place = a.city||a.town||a.village||a.suburb||a.county||a.country||'';
+    } catch(e){}
+    const pill=document.getElementById('locPill');
+    const txt=document.getElementById('locText');
+    if(pill&&txt){ pill.style.display='block'; txt.textContent=currentLoc.place||`${lat.toFixed(3)},${lon.toFixed(3)}`; }
+    const st=document.getElementById('locStatusTxt');
+    if(st) st.textContent='📍 '+(currentLoc.place||'Location active');
+  }, ()=>{}, {timeout:10000,enableHighAccuracy:false});
+}
+
+/* ════════════════════════════════════════════════
+   AUDIO PIPELINE
+════════════════════════════════════════════════ */
+async function toggleListen() { listening ? stopListen() : await startListen(); }
+
+async function startListen() {
+  if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  if (audioCtx.state==='suspended') await audioCtx.resume();
+
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio:{ echoCancellation:false, noiseSuppression:false, autoGainControl:false }
+    });
+  } catch(e) {
+    if(e.name==='NotAllowedError')
+      alert('Microphone permission required.\n\niPhone: Settings → Safari → Microphone → Allow.\nThen reload the page.');
+    else alert('Cannot access microphone: '+e.message);
+    return;
+  }
+
+  nativeSR = audioCtx.sampleRate;
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.4;
+
+  scriptProc = audioCtx.createScriptProcessor(4096,1,1);
+  const src = audioCtx.createMediaStreamSource(mediaStream);
+  src.connect(analyser);
+  src.connect(scriptProc);
+  scriptProc.connect(audioCtx.destination);
+
+  audioBuf=[]; bufSecs=0;
+  scriptProc.onaudioprocess = onAudio;
+
+  startSilentNode();   // keep audio alive in background
+  startLocation();
+  if(S.useWakeLock) requestWakeLock();
+
+  listening=true; hasStopped=false;
+  setListenUI('recording');
+  clearSpec(); startSpecLoop();
+}
+
+function stopListen() {
+  listening=false;
+  if(scriptProc){ scriptProc.disconnect(); scriptProc=null; }
+  if(mediaStream){ mediaStream.getTracks().forEach(t=>t.stop()); mediaStream=null; }
+  stopSilentNode();
+  stopLocation();
+  releaseWakeLock();
+  stopSpecLoop(); idleWave();
+  hasStopped=true;
+  setListenUI('stopped');
+  const pill=document.getElementById('locPill');
+  if(pill) pill.style.display='none';
+}
+
+function onAudio(e) {
+  if(!listening) return;
+  const chunk=new Float32Array(e.inputBuffer.getChannelData(0));
+  audioBuf.push(chunk); bufSecs+=chunk.length/nativeSR;
+  if(bufSecs>=CHUNK_SEC&&!inferring){
+    const len=audioBuf.reduce((s,a)=>s+a.length,0);
+    const flat=new Float32Array(len); let off=0;
+    for(const a of audioBuf){flat.set(a,off);off+=a.length;}
+    audioBuf=[]; bufSecs=0;
+    runInference(flat);
+  }
+}
+
+function resample(data,from,to){
+  if(from===to) return data;
+  const ratio=from/to, out=new Float32Array(Math.round(data.length/ratio));
+  for(let i=0;i<out.length;i++){
+    const p=i*ratio, lo=p|0;
+    out[i]=data[lo]+(p-lo)*((data[lo+1]||0)-data[lo]);
+  }
+  return out;
+}
+
+/* ════════════════════════════════════════════════
+   INFERENCE
+════════════════════════════════════════════════ */
+async function runInference(raw) {
+  if(!ortSession||inferring) return;
+  inferring=true;
+  try {
+    let audio=nativeSR===TARGET_SR?raw:resample(raw,nativeSR,TARGET_SR);
+    const N=TARGET_SR*CHUNK_SEC;
+    if(audio.length<N){const p=new Float32Array(N);p.set(audio);audio=p;}
+    else if(audio.length>N) audio=audio.slice(0,N);
+    const tensor=new ort.Tensor('float32',audio,[1,N]);
+    const feeds={}; feeds[ortSession.inputNames[0]]=tensor;
+    const out=await ortSession.run(feeds);
+    const scores=out[ortSession.outputNames[0]].data;
+    let bestIdx=-1, bestVal=S.threshold/100;
+    for(let i=0;i<scores.length&&i<labels.length;i++)
+      if(scores[i]>bestVal){bestVal=scores[i];bestIdx=i;}
+    if(bestIdx>=0) addDetection(labels[bestIdx],bestVal);
+  } catch(e){ console.warn('Inference:',e.message||e); }
+  finally { inferring=false; }
+}
+
+/* ════════════════════════════════════════════════
+   CONSERVATION STATUS  (async, cached per species)
+════════════════════════════════════════════════ */
+async function getCS(sci) {
+  if(csCache[sci]!==undefined) return csCache[sci];
+  csCache[sci]=''; // prevent duplicate requests
+  try {
+    const r=await fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(sci)}&rank=species&per_page=1`);
+    const d=await r.json();
+    const taxon=d.results?.[0];
+    const statuses=taxon?.conservation_statuses||[];
+    const global=statuses.find(s=>!s.place_id)||statuses[0];
+    const code=(global?.status||'').toUpperCase().trim();
+    csCache[sci]=IUCN_CODES.has(code)?code:'';
+  } catch(e){ csCache[sci]=''; }
+  return csCache[sci];
+}
+
+function applyCSBadge(sci, code) {
+  if(!code) return;
+  const iucn=IUCN[code]; if(!iucn) return;
+  // Update every badge with this species in the feed
+  document.querySelectorAll(`.cs-mini[data-sci="${CSS.escape(sci)}"]`).forEach(b=>{
+    b.className=`cs-mini show ${iucn.cls}`;
+    b.textContent=code;
+  });
+}
+
+/* ════════════════════════════════════════════════
+   HISTORY
+════════════════════════════════════════════════ */
+function loadHistory(){
+  try{return JSON.parse(localStorage.getItem(HIST_KEY)||'[]');}catch(e){return[];}
+}
+function saveHistory(h){
+  try{localStorage.setItem(HIST_KEY,JSON.stringify(h.slice(0,MAX_HIST)));}catch(e){}
+}
+function pushHistory(lbl,score,cs){
+  const h=loadHistory();
+  const e={t:Date.now(),com:lbl.com,sci:lbl.sci,s:Math.round(score*100),cs:cs||''};
+  if(currentLoc){e.lat=currentLoc.lat;e.lon=currentLoc.lon;e.place=currentLoc.place;}
+  h.unshift(e);
+  saveHistory(h);
+  return e;
+}
+
+/* ════════════════════════════════════════════════
+   DETECTION CARDS
+════════════════════════════════════════════════ */
+function addDetection(lbl, score) {
+  // Push to history immediately (cs will be updated async)
+  const entry = pushHistory(lbl, score, csCache[lbl.sci]||'');
+  const feed  = document.getElementById('feed');
+  document.getElementById('emptyState')?.remove();
+
+  const pct   = Math.round(score*100);
+  const cls   = pct>=70?'hi':pct>=35?'md':'lo';
+  const color = pct>=70?'var(--gold2)':pct>=35?'var(--sage2)':'var(--t2)';
+  const time  = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+  // Pre-fill badge if we already have CS cached
+  const existingCS = csCache[lbl.sci]||'';
+  const iucn = existingCS ? IUCN[existingCS] : null;
+  const badgeHtml = `<span class="cs-mini${iucn?' show '+iucn.cls:''}" data-sci="${esc(lbl.sci)}">${existingCS}</span>`;
+
+  const card=document.createElement('div');
+  card.className='det';
+  card.innerHTML=
+    `<div class="det-l">
+       <div class="det-top">
+         <div class="det-name">${esc(lbl.com)}</div>
+         ${badgeHtml}
+       </div>
+       <div class="det-sci">${esc(lbl.sci)}</div>
+       ${entry.place?`<div class="det-loc">📍 ${esc(entry.place)}</div>`:''}
+       <div class="det-bar"><div class="det-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+     </div>
+     <div class="det-r">
+       <div class="det-pct ${cls}">${pct}%</div>
+       <div class="det-t">${time}</div>
+     </div>`;
+  card.addEventListener('click',()=>{ infoFromTab='LI'; openInfo(lbl); });
+  feed.insertBefore(card,feed.firstChild);
+  while(feed.children.length>60) feed.removeChild(feed.lastChild);
+
+  // Fetch CS async and update badge + history
+  if(!existingCS) {
+    getCS(lbl.sci).then(code=>{
+      if(!code) return;
+      applyCSBadge(lbl.sci, code);
+      // Patch this entry in history
+      const h=loadHistory();
+      const idx=h.findIndex(d=>d.t===entry.t);
+      if(idx>=0&&!h[idx].cs){ h[idx].cs=code; saveHistory(h); }
+    });
+  }
+}
+
+function clearFeed(){
+  document.getElementById('feed').innerHTML=
+    `<div class="empty" id="emptyState">
+       Press <strong>Start</strong>, hold your phone near a bird sound.<br>
+       Tap any result for full field notes.
+     </div>`;
+}
+
+/* ════════════════════════════════════════════════
+   STATS
+════════════════════════════════════════════════ */
+function renderStats(){
+  const history=loadHistory();
+  const body=document.getElementById('stBody');
+  if(!history.length){
+    body.innerHTML=`<div class="empty" style="padding:60px 20px">No detections yet.<br>Tap <strong>Listen</strong> to start.</div>`;
+    return;
+  }
+  const byS={};
+  for(const d of history){
+    if(!byS[d.sci]) byS[d.sci]={com:d.com,sci:d.sci,count:0,last:0,best:0,cs:d.cs||''};
+    byS[d.sci].count++;
+    if(d.t>byS[d.sci].last) byS[d.sci].last=d.t;
+    if(d.s>byS[d.sci].best) byS[d.sci].best=d.s;
+    if(d.cs&&!byS[d.sci].cs) byS[d.sci].cs=d.cs;
+  }
+  const ranked=Object.values(byS).sort((a,b)=>b.count-a.count);
+  const topN=ranked[0].count;
+  const today=history.filter(d=>new Date(d.t).toDateString()===new Date().toDateString()).length;
+
+  let html=`<div class="sum-row">
+    <div class="sum-pill"><div class="sum-n">${history.length}</div><div class="sum-l">Total</div></div>
+    <div class="sum-pill"><div class="sum-n">${ranked.length}</div><div class="sum-l">Species</div></div>
+    <div class="sum-pill"><div class="sum-n">${today}</div><div class="sum-l">Today</div></div>
+  </div>`;
+
+  const medals=['🥇','🥈','🥉'];
+  const rkCls=['rk1','rk2','rk3'];
+  html+=`<div class="sec-head">🏆 Frequent Visitors</div>`;
+  ranked.slice(0,10).forEach((v,i)=>{
+    const pct=Math.round((v.count/topN)*100);
+    const iucn=v.cs?IUCN[v.cs]:null;
+    const badge=iucn?`<span class="cs-mini show ${iucn.cls}" style="margin-left:6px">${v.cs}</span>`:'';
+    html+=`<div class="vis-card" onclick='openInfoByName(${JSON.stringify({com:v.com,sci:v.sci})})'>
+      <div class="vis-rank ${i<3?rkCls[i]:'rk_'}">${i<3?medals[i]:i+1}</div>
+      <div class="vis-info">
+        <div style="display:flex;align-items:center">${esc(v.com)}${badge}</div>
+        <div class="vis-sci">${esc(v.sci)}</div>
+        <div class="vis-bw"><div class="vis-bf" style="width:${pct}%"></div></div>
+      </div>
+      <div class="vis-ct">
+        <div class="vis-n">${v.count}</div>
+        <div class="vis-s">${v.count===1?'time':'times'}</div>
+      </div>
+    </div>`;
+  });
+
+  html+=`<div class="sec-head">🕐 Detection History</div><div class="hist-wrap">`;
+  history.slice(0,80).forEach(d=>{
+    const dt=new Date(d.t);
+    const ds=dt.toLocaleDateString([],{month:'short',day:'numeric'});
+    const ts=dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const cls=d.s>=70?'hi':d.s>=35?'md':'lo';
+    const iucn=d.cs?IUCN[d.cs]:null;
+    const badge=iucn?`<span class="cs-mini show ${iucn.cls}">${d.cs}</span>`:'';
+    html+=`<div class="hist-item" onclick='openInfoByName(${JSON.stringify({com:d.com,sci:d.sci})})'>
+      <div class="hist-l">
+        ${badge}
+        <div class="hist-info">
+          <div class="hist-name">${esc(d.com)}</div>
+          <div class="hist-sci">${esc(d.sci)}</div>
+          ${d.place?`<div class="hist-loc">📍 ${esc(d.place)}</div>`:''}
+        </div>
+      </div>
+      <div class="hist-r">
+        <div class="hist-pct ${cls}">${d.s}%</div>
+        <div class="hist-time">${ds} · ${ts}</div>
+      </div>
+    </div>`;
+  });
+  html+=`</div>`;
+  body.innerHTML=html;
+}
+
+/* ════════════════════════════════════════════════
+   EXPORT CSV  (with Conservation Status column)
+════════════════════════════════════════════════ */
+function exportCSV(){
+  const history=loadHistory();
+  if(!history.length){alert('No detections to export yet.');return;}
+  const rows=[['Date','Time','Common Name','Scientific Name',
+    'Confidence %','Conservation Status','IUCN Code',
+    'Location','Latitude','Longitude']];
+  for(const d of history){
+    const dt=new Date(d.t);
+    const iucnTxt=d.cs&&IUCN[d.cs]?IUCN[d.cs].txt:'';
+    rows.push([
+      dt.toLocaleDateString(),
+      dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+      d.com, d.sci, d.s,
+      iucnTxt, d.cs||'',
+      d.place||'', d.lat||'', d.lon||''
+    ]);
+  }
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=`aviara-birds-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+/* ════════════════════════════════════════════════
+   MAP
+════════════════════════════════════════════════ */
+function loadLeaflet(){
+  return new Promise((res,rej)=>{
+    if(window.L){res();return;}
+    const css=document.createElement('link');
+    css.rel='stylesheet';css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(css);
+    const s=document.createElement('script');
+    s.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s.onload=res;s.onerror=rej;document.head.appendChild(s);
+  });
+}
+async function initMap(){
+  if(leafletMap) return;
+  await loadLeaflet();
+  delete L.Icon.Default.prototype._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+    iconUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+    shadowUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  });
+  leafletMap=L.map('mapDiv',{tap:false});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© <a href="https://openstreetmap.org">OpenStreetMap</a>',maxZoom:19
+  }).addTo(leafletMap);
+}
+async function renderMap(){
+  const history=loadHistory();
+  const withLoc=history.filter(d=>d.lat&&d.lon);
+  const noMsg=document.getElementById('noLocMsg');
+  const mapDiv=document.getElementById('mapDiv');
+  if(!withLoc.length){
+    mapDiv.style.display='none'; if(noMsg) noMsg.style.display='flex'; return;
+  }
+  mapDiv.style.display='block'; if(noMsg) noMsg.style.display='none';
+  await initMap();
+  setTimeout(()=>{ leafletMap.invalidateSize(); plotMarkers(withLoc); },150);
+}
+function plotMarkers(withLoc){
+  if(!leafletMap) return;
+  if(mapLayer){ leafletMap.removeLayer(mapLayer); }
+  mapLayer=L.layerGroup().addTo(leafletMap);
+  const icon=L.divIcon({
+    html:'<div style="font-size:22px;filter:drop-shadow(0 1px 4px rgba(0,0,0,.8))">🐦</div>',
+    iconSize:[28,28],iconAnchor:[14,14],popupAnchor:[0,-14],className:''
+  });
+  const bounds=[];
+  withLoc.forEach(d=>{
+    const dt=new Date(d.t);
+    const m=L.marker([d.lat,d.lon],{icon}).addTo(mapLayer);
+    m.bindPopup(
+      `<div style="font-family:Georgia,serif;min-width:170px;line-height:1.65">
+        <b style="font-size:15px">${esc(d.com)}</b><br>
+        <i style="font-size:12px;color:#777">${esc(d.sci)}</i><br>
+        <span style="font-size:12px">📅 ${dt.toLocaleDateString()} · ${dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span><br>
+        <span style="font-size:12px">🎯 ${d.s}% confidence</span>
+        ${d.cs&&IUCN[d.cs]?`<br><span style="font-size:12px">🛡 ${IUCN[d.cs].txt}</span>`:''}
+        ${d.place?`<br><span style="font-size:12px">📍 ${esc(d.place)}</span>`:''}
+        <br><a href="#" onclick="event.preventDefault();openInfoByName({com:'${esc(d.com)}',sci:'${esc(d.sci)}'});if(leafletMap)leafletMap.closePopup()"
+          style="font-size:13px;color:#C8972A;text-decoration:none">View Field Notes →</a>
+      </div>`,{maxWidth:230}
+    );
+    bounds.push([d.lat,d.lon]);
+  });
+  leafletMap.fitBounds(bounds,{padding:[30,30],maxZoom:14});
+}
+function refreshMap(){ renderMap(); }
+
+/* ════════════════════════════════════════════════
+   BIRD INFO
+════════════════════════════════════════════════ */
+function openInfoByName(lbl){ infoFromTab='ST'; openInfo(lbl); }
+
+async function openInfo(lbl){
+  document.getElementById('infoBack').onclick=()=>goTab(infoFromTab);
+  show('IN');
+  document.getElementById('IN').scrollTop=0;
+  document.getElementById('infoBody').innerHTML=
+    `<div style="text-align:center;padding:60px 20px">
+       <div style="font-size:44px;display:inline-block;animation:spin 1.5s linear infinite">🪶</div>
+       <div style="margin-top:14px;color:var(--t2);font-style:italic;font-size:15px">Fetching field notes…</div>
+     </div>`;
+  const [iR,wR,cR]=await Promise.allSettled([
+    fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(lbl.sci)}&rank=species&per_page=1`).then(r=>r.json()).catch(()=>null),
+    fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(lbl.com)}`).then(r=>r.ok?r.json():null).catch(()=>null),
+    fetchBirdCall(lbl.sci)
+  ]);
+  renderInfo(lbl, iR.value?.results?.[0]||null, wR.value||null, cR.value||null);
+}
+
+async function fetchBirdCall(sci){
+  try{
+    const r=await fetch(`https://xeno-canto.org/api/2/recordings?query=${encodeURIComponent(sci)}&page=1`);
+    if(!r.ok) return null;
+    const d=await r.json();
+    const rec=d.recordings?.[0];
+    if(!rec) return null;
+    const fileUrl=rec.file.startsWith('http')?rec.file:'https:'+rec.file;
+    return{id:rec.id,url:fileUrl,rec:rec.rec||'',loc:rec.loc||'',cnt:rec.cnt||''};
+  }catch(e){return null;}
+}
+
+function renderInfo(lbl,inat,wiki,call){
+  const extract=wiki?.extract||'';
+  const photo=inat?.default_photo?.medium_url||(wiki?.thumbnail?.source?.replace(/\/\d+px-/,'/640px-'))||null;
+  const statuses=inat?.conservation_statuses||[];
+  const gStatus=statuses.find(s=>!s.place_id)||statuses[0];
+  const code=(gStatus?.status||'').toUpperCase().trim();
+  const iucn=IUCN[code]||null;
+
+  // Cache the status we got from iNat
+  if(code&&IUCN_CODES.has(code)) {
+    csCache[lbl.sci]=code;
+    // Update any cards in the feed
+    applyCSBadge(lbl.sci, code);
+    // Update history entries
+    const h=loadHistory();
+    let changed=false;
+    h.forEach(d=>{ if(d.sci===lbl.sci&&!d.cs){ d.cs=code; changed=true; } });
+    if(changed) saveHistory(h);
+  }
+
+  const lifespan=parseLifespan(extract);
+  const migration=parseMigration(extract);
+  const diet=parseDiet(extract);
+  const habitat=parseHabitat(extract);
+  const wingspan=parseWingspan(extract);
+
+  let tiles='';
+  if(iucn) tiles+=mkTile('w','🛡️ Conservation Status',
+    `<span class="cs-badge ${iucn.cls}" style="position:static">${code} — ${iucn.txt}</span>`);
+  if(migration) tiles+=mkTile('',`${migration.e} Migration`,migration.txt);
+  if(lifespan)  tiles+=mkTile('','⏳ Lifespan',lifespan);
+  if(diet)      tiles+=mkTile('','🍃 Diet',diet);
+  if(habitat)   tiles+=mkTile('','🌿 Habitat',habitat);
+  if(wingspan)  tiles+=mkTile('','📐 Wingspan',wingspan);
+
+  const about=extract.length>300?extract.slice(0,300).replace(/\s\S+$/,'')+'…':extract;
+  const wikiUrl=wiki?.content_urls?.desktop?.page||null;
+  const xcSearch=`https://xeno-canto.org/explore?query=${encodeURIComponent(lbl.sci)}`;
+
+  const callHtml=call?.id
+    ?`<div class="call-card">
+        <div class="f-lbl">🎵 Bird Call</div>
+        <audio controls preload="none" style="width:100%;margin:8px 0;accent-color:var(--gold)"
+          src="${esc(call.url)}">Your browser does not support audio.</audio>
+        <div class="call-credit">
+          Rec. by ${esc(call.rec)}${call.loc?` · ${esc(call.loc)}, ${esc(call.cnt)}`:''}
+          · <a href="https://xeno-canto.org/${call.id}" target="_blank"
+               style="color:var(--gold);text-decoration:none">xeno-canto.org</a>
+        </div>
+      </div>`
+    :`<div class="call-card">
+        <div class="f-lbl">🎵 Bird Call</div>
+        <a href="${esc(xcSearch)}" target="_blank" class="xc-link">
+          ▶&nbsp; Listen to ${esc(lbl.com)} calls on xeno-canto
+        </a>
+        <div class="call-credit" style="margin-top:8px">
+          Opens xeno-canto.org · the world's largest bird sound archive
+        </div>
+      </div>`;
+
+  const hist=loadHistory();
+  const myCount=hist.filter(d=>d.sci===lbl.sci).length;
+  const myBest=hist.filter(d=>d.sci===lbl.sci).reduce((m,d)=>Math.max(m,d.s),0);
+
+  document.getElementById('infoBody').innerHTML=
+    `<div class="photo-wrap">
+       ${photo?`<img src="${esc(photo)}" alt="${esc(lbl.com)}"
+         onerror="this.parentElement.innerHTML='<div class=\\'photo-ph\\'>🦜</div>'">`
+         :`<div class="photo-ph">🦜</div>`}
+       ${iucn?`<div class="cs-badge abs ${iucn.cls}">${code} · ${iucn.txt}</div>`:''}
+     </div>
+
+     <div class="name-card">
+       <div class="c-name">${esc(lbl.com)}</div>
+       <div class="s-name">${esc(lbl.sci)}</div>
+       ${wiki?.description?`<div class="desc-row">${esc(wiki.description)}</div>`:''}
+     </div>
+
+     ${callHtml}
+
+     ${myCount>0?`<div class="tile w" style="display:flex;justify-content:space-between;align-items:center">
+       <div><div class="t-lbl">🔭 Your Sightings</div>
+         <div class="t-val">Detected <strong>${myCount}</strong> time${myCount===1?'':'s'}</div></div>
+       <div style="text-align:right"><div class="t-lbl">Best Confidence</div>
+         <div class="t-val" style="color:var(--gold2)">${myBest}%</div></div>
+     </div>`:''}
+
+     ${tiles?`<div class="grid">${tiles}</div>`:''}
+
+     ${about?`<div class="fact">
+       <div class="f-lbl">📖 About this bird</div>
+       <div class="f-txt">${esc(about)}</div>
+       ${wikiUrl?`<a href="${esc(wikiUrl)}" target="_blank" class="f-link">Read full article on Wikipedia →</a>`:''}
+     </div>`:''}
+
+     <button class="btn ghost" style="margin-top:4px" onclick="goTab('${infoFromTab}')">← Back</button>`;
+}
+
+function mkTile(w,lbl,val){
+  return `<div class="tile${w?' '+w:''}"><div class="t-lbl">${lbl}</div><div class="t-val">${val}</div></div>`;
+}
+function parseLifespan(t){
+  const ps=[/lives?(?:\s+for)?\s+(?:up to\s+)?(\d+(?:[–\-]\d+)?)\s+years?/i,
+    /lifespan(?:\s+of)?\s+(?:up to\s+)?(\d+(?:[–\-]\d+)?)\s+years?/i,
+    /(?:can|may)\s+live\s+(?:up to\s+)?(\d+)\s+years?/i,
+    /(?:up to\s+)?(\d+)\s+years?\s+(?:in the wild|in captivity)/i];
+  for(const p of ps){const m=t.match(p);if(m)return m[1]+' years';}return null;
+}
+function parseMigration(t){
+  if(/long[- ]distance\s+migrat/i.test(t))return{e:'🌍',txt:'Long-distance migrant'};
+  if(/partial\s+migrat/i.test(t))return{e:'↕️',txt:'Partial migrant'};
+  if(/migrat(?:ory|es|ion)/i.test(t))return{e:'✈️',txt:'Migratory'};
+  if(/winter\s+visitor|wintering/i.test(t))return{e:'❄️',txt:'Winter visitor'};
+  if(/year[- ]round|sedentary|resident/i.test(t))return{e:'🏡',txt:'Year-round resident'};
+  return null;
+}
+function parseDiet(t){
+  const m=t.match(/(?:feeds?\s+(?:mainly\s+)?on|eats?|diet\s+(?:consists?\s+of)?)\s+([^.;,]{6,65})/i);
+  return m?uc(m[1].trim().replace(/\.$/,'')):null;
+}
+function parseHabitat(t){
+  const m=t.match(/(?:found|lives?|inhabits?|nests?)\s+(?:in|among|on|near|across)\s+([^.;,]{6,70})/i);
+  return m?uc(m[1].trim().replace(/\.$/,'')):null;
+}
+function parseWingspan(t){
+  const m=t.match(/wingspan\s+of\s+(\d+(?:[–\-]\d+)?\s*cm)/i)||t.match(/(\d+(?:[–\-]\d+)?\s*cm)\s+wingspan/i);
+  return m?m[1]:null;
+}
+
+/* ════════════════════════════════════════════════
+   SPECTROGRAM  +  WAVEFORM  (fixed)
+════════════════════════════════════════════════ */
+function setupCanvases(){
+  const sc=document.getElementById('specCanvas');
+  const wc=document.getElementById('waveCanvas');
+  sc.width=sc.offsetWidth||390; sc.height=112;
+  wc.width=wc.offsetWidth||390; wc.height=42;
+  specCtx=sc.getContext('2d'); waveCtx=wc.getContext('2d');
+  clearSpec(); idleWave();
+}
+
+function clearSpec(){
+  if(!specCtx) return;
+  specCtx.fillStyle='#020602';
+  specCtx.fillRect(0,0,specCtx.canvas.width,specCtx.canvas.height);
+  specX=0;
+}
+
+function startSpecLoop(){
+  cancelAnimationFrame(specRaf);
+  (function frame(){
+    if(!listening||!analyser) return;
+    specRaf=requestAnimationFrame(frame);
+
+    // Frequency data → scrolling spectrogram
+    const freqData=new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(freqData);
+    drawSpecCol(freqData);
+
+    // Time-domain data → waveform bars (FIXED)
+    const timeData=new Uint8Array(analyser.fftSize);
+    analyser.getByteTimeDomainData(timeData);
+    drawWave(timeData);
+  })();
+}
+function stopSpecLoop(){ cancelAnimationFrame(specRaf); specRaf=null; }
+
+function drawSpecCol(d){
+  const W=specCtx.canvas.width, H=specCtx.canvas.height;
+  const minB=19, maxB=Math.min(460,d.length-1), range=maxB-minB;
+  if(specX>=W){
+    specCtx.putImageData(specCtx.getImageData(1,0,W-1,H),0,0);
+    specX=W-1;
+  }
+  for(let row=0;row<H;row++){
+    const v=d[minB+Math.floor(((H-1-row)/H)*range)]/255;
+    let r,g,b;
+    if(v<.20){const t=v/.20;r=Math.round(t*68);g=0;b=Math.round(t*84);}
+    else if(v<.40){const t=(v-.20)/.20;r=Math.round(68+t*4);g=Math.round(t*57);b=Math.round(84+t*85);}
+    else if(v<.60){const t=(v-.40)/.20;r=Math.round(72-t*34);g=Math.round(57+t*107);b=Math.round(169-t*30);}
+    else if(v<.80){const t=(v-.60)/.20;r=Math.round(38+t*157);g=Math.round(164+t*67);b=Math.round(139-t*96);}
+    else{const t=(v-.80)/.20;r=Math.round(195+t*58);g=Math.round(231+t*21);b=Math.round(43-t*43);}
+    specCtx.fillStyle=`rgb(${r},${g},${b})`;
+    specCtx.fillRect(specX,row,1,1);
+  }
+  specX++;
+}
+
+/* FIXED waveform — uses time-domain RMS amplitude, responds visibly to any sound */
+function drawWave(td){
+  if(!waveCtx) return;
+  const W=waveCtx.canvas.width, H=waveCtx.canvas.height;
+  waveCtx.clearRect(0,0,W,H);
+
+  const n=60;
+  const step=Math.max(1,Math.floor(td.length/n));
+  const bw=Math.max(2,Math.floor(W/n)-1);
+
+  for(let i=0;i<n;i++){
+    // RMS amplitude for this segment
+    let sum=0;
+    for(let j=0;j<step;j++){
+      const v=(td[Math.min(i*step+j,td.length-1)]||128)-128;
+      sum+=v*v;
+    }
+    const rms=Math.sqrt(sum/step)/128; // 0 → 1
+    const bh=Math.max(3, rms*H*2.2);  // multiply for visibility
+    const alpha=Math.min(1, 0.18+rms*1.8);
+    waveCtx.fillStyle=`rgba(200,151,42,${alpha})`;
+    waveCtx.fillRect(i*(bw+1),(H-bh)/2,bw,bh);
+  }
+}
+
+function idleWave(){
+  if(!waveCtx) return;
+  const W=waveCtx.canvas.width, H=waveCtx.canvas.height;
+  waveCtx.clearRect(0,0,W,H);
+  const n=60, bw=Math.max(2,Math.floor(W/n)-1);
+  for(let i=0;i<n;i++){
+    const bh=(0.04+Math.abs(Math.sin(i*.4))*.025)*H;
+    waveCtx.fillStyle='rgba(90,80,55,0.28)';
+    waveCtx.fillRect(i*(bw+1),(H-bh)/2,bw,bh);
+  }
+}
+
+/* ════════════════════════════════════════════════
+   SETTINGS UI
+════════════════════════════════════════════════ */
+function applySett(){
+  document.getElementById('confSlider').value=S.threshold;
+  document.getElementById('confVal').textContent=S.threshold+'%';
+  document.getElementById('locToggle').checked=S.useLocation;
+  document.getElementById('wakeToggle').checked=S.useWakeLock;
+}
+function updateThreshold(v){
+  S.threshold=parseInt(v);
+  document.getElementById('confVal').textContent=v+'%';
+  saveSett();
+}
+function toggleLocation(on){
+  S.useLocation=on; saveSett();
+  const st=document.getElementById('locStatus');
+  if(on&&listening) startLocation();
+  else if(!on){ stopLocation(); currentLoc=null; }
+  if(st) st.style.display=on&&currentLoc?'flex':'none';
+}
+function toggleWakeLock(on){
+  S.useWakeLock=on; saveSett();
+  if(!on) releaseWakeLock();
+  else if(listening) requestWakeLock();
+}
+async function checkUpdate(){
+  if(!confirm('Clear the cached model and re-download the latest version (~52 MB)?\n\nThis requires an internet connection.')) return;
+  try{
+    const c=await caches.open(CACHE_KEY);
+    await c.delete(MODEL_URL);
+    await c.delete(LABELS_URL);
+    alert('Cache cleared. The app will now reload and download the latest model.');
+    location.reload();
+  }catch(e){alert('Error: '+e.message);}
+}
+function clearAllData(){
+  if(!confirm('Delete all detection history? This cannot be undone.')) return;
+  localStorage.removeItem(HIST_KEY);
+  document.getElementById('histCount').textContent='0';
+  alert('History cleared.');
+}
+
+/* ════════════════════════════════════════════════
+   NAVIGATION
+════════════════════════════════════════════════ */
+function show(id){
+  document.querySelectorAll('.scr').forEach(s=>s.classList.add('off'));
+  document.getElementById(id).classList.remove('off');
+}
+function goTab(id){
+  show(id);
+  document.querySelectorAll('.tb').forEach(b=>b.classList.toggle('act',b.dataset.tab===id));
+  if(id==='ST') renderStats();
+  if(id==='MA') renderMap();
+  if(id==='SE'){
+    applySett();
+    document.getElementById('histCount').textContent=loadHistory().length;
+    const st=document.getElementById('locStatus');
+    if(st) st.style.display=S.useLocation&&currentLoc?'flex':'none';
+  }
+}
+
+/* Three distinct button/label states */
+function setListenUI(state){
+  const btn=document.getElementById('listenBtn');
+  const lbl=document.getElementById('statusLbl');
+  const txt=document.getElementById('statusTxt');
+
+  // Remove all state classes
+  btn.classList.remove('idle','recording','stopped');
+
+  if(state==='recording'){
+    btn.textContent='⏹ Stop';
+    btn.classList.add('recording');
+    lbl.innerHTML='<span class="dot-pulse"></span><span id="statusTxt">● Listening for birds…</span>';
+  } else if(state==='stopped'){
+    btn.textContent='🎙 Start';
+    btn.classList.add('stopped');
+    lbl.innerHTML='<span class="dot-stop"></span><span id="statusTxt">Stopped · tap Start to resume</span>';
+  } else {
+    btn.textContent='🎙 Start';
+    btn.classList.add('idle');
+    lbl.innerHTML='<span id="statusTxt">Tap Start to identify birds</span>';
+  }
+}
+
+/* ════════════════════════════════════════════════
+   BOOT HELPERS
+════════════════════════════════════════════════ */
+function setStep(n,done){
+  ['st1','st2','st3'].forEach((id,i)=>{
+    const el=document.getElementById(id);
+    el.classList.remove('on','ok');
+    if(done&&i+1===n){el.classList.add('ok');return;}
+    if(!done&&i+1===n) el.classList.add('on');
+    if(i+1<n) el.classList.add('ok');
+  });
+}
+function setProg(pct){ document.getElementById('progFill').style.width=Math.min(100,pct)+'%'; }
+function showErr(ttl,msg){
+  document.getElementById('errTtl').textContent=ttl;
+  document.getElementById('errMsg').textContent=msg;
+  show('ER');
+}
+
+/* ════════════════════════════════════════════════
+   CACHE
+════════════════════════════════════════════════ */
+async function cacheGet(url,type){
+  try{
+    const c=await caches.open(CACHE_KEY), r=await c.match(url);
+    if(!r) return null;
+    return type==='buffer'?r.arrayBuffer():r.text();
+  }catch(e){return null;}
+}
+async function cachePut(url,data,mime){
+  try{
+    const c=await caches.open(CACHE_KEY);
+    const body=typeof data==='string'?data:new Uint8Array(data);
+    await c.put(url,new Response(body,{headers:{'Content-Type':mime}}));
+  }catch(e){}
+}
+
+/* ════════════════════════════════════════════════
+   UTILS
+════════════════════════════════════════════════ */
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const uc=s=>s.charAt(0).toUpperCase()+s.slice(1);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+/* ════════════════════════════════════════════════
+   PWA — register service worker (enables Android install)
+════════════════════════════════════════════════ */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js')
+    .then(()=>console.log('SW registered'))
+    .catch(e=>console.log('SW error:',e));
+}
+</script>
+</body>
+</html>

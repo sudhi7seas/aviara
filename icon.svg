@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="115" fill="#060C06"/>
+
+  <!-- Outer glow -->
+  <ellipse cx="256" cy="265" rx="160" ry="185" fill="rgba(200,151,42,0.07)"/>
+
+  <!-- Feather body -->
+  <path d="M256 72
+     C235 100 185 175 178 270
+     C173 330 193 390 256 435
+     C319 390 339 330 334 270
+     C327 175 277 100 256 72 Z"
+     fill="#C8972A"/>
+
+  <!-- Feather shading (right half darker) -->
+  <path d="M256 72
+     C256 72 277 100 334 270
+     C339 330 319 390 256 435
+     L256 72 Z"
+     fill="#A07020" opacity="0.45"/>
+
+  <!-- Central quill spine -->
+  <line x1="256" y1="72" x2="256" y2="435"
+     stroke="#E8B84B" stroke-width="4.5"
+     stroke-linecap="round" opacity="0.9"/>
+
+  <!-- Left barbs -->
+  <line x1="253" y1="150" x2="198" y2="188" stroke="#7A5515" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <line x1="252" y1="188" x2="186" y2="232" stroke="#7A5515" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <line x1="251" y1="226" x2="178" y2="276" stroke="#7A5515" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <line x1="251" y1="264" x2="177" y2="318" stroke="#7A5515" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <line x1="252" y1="302" x2="183" y2="356" stroke="#7A5515" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <line x1="253" y1="338" x2="196" y2="388" stroke="#7A5515" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <line x1="254" y1="370" x2="213" y2="413" stroke="#7A5515" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+
+  <!-- Right barbs -->
+  <line x1="259" y1="150" x2="314" y2="188" stroke="#7A5515" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <line x1="260" y1="188" x2="326" y2="232" stroke="#7A5515" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <line x1="261" y1="226" x2="334" y2="276" stroke="#7A5515" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <line x1="261" y1="264" x2="335" y2="318" stroke="#7A5515" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <line x1="260" y1="302" x2="329" y2="356" stroke="#7A5515" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <line x1="259" y1="338" x2="316" y2="388" stroke="#7A5515" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <line x1="258" y1="370" x2="299" y2="413" stroke="#7A5515" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+
+  <!-- Tip highlight -->
+  <ellipse cx="256" cy="90" rx="12" ry="18" fill="#F0D060" opacity="0.6"/>
+</svg>
