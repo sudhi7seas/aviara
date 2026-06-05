@@ -55,7 +55,6 @@ self.addEventListener('fetch', event => {
     'api.inaturalist.org',
     'wikipedia.org',
     'nominatim.openstreetmap.org',
-    'xeno-canto.org',
     'tile.openstreetmap.org',
     'unpkg.com',
     'cdn.jsdelivr.net',

@@ -141,8 +141,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 @keyframes slideIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
 .det-l{min-width:0;flex:1}
 .det-top{display:flex;align-items:center;gap:7px;margin-bottom:2px;flex-wrap:wrap}
-.det-name{font-size:17px;color:var(--t1);line-height:1.2;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.det-name{font-size:17px;color:var(--t1);line-height:1.2}
 .det-sci{font-size:11px;color:var(--t3);font-style:italic;margin-bottom:2px}
 .det-loc{font-size:10px;color:var(--sage2)}
 .det-bar{height:3px;border-radius:99px;background:var(--elev);margin-top:6px;overflow:hidden}
@@ -169,7 +168,8 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 #ST{padding:0;justify-content:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch;
   padding-bottom:calc(var(--tab) + env(safe-area-inset-bottom))}
 .st-header{display:flex;justify-content:space-between;align-items:center;width:100%;
-  padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top)+6px);flex-shrink:0}
+  padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top)+6px);flex-shrink:0;
+  position:sticky;top:0;z-index:5;background:rgba(5,12,5,.97);backdrop-filter:blur(10px)}
 .st-title{font-family:'Playfair Display',serif;font-size:22px;font-weight:700}
 .exp-btn{display:flex;align-items:center;gap:5px;background:var(--elev);
   border:1px solid var(--bdr);border-radius:10px;padding:7px 11px;
@@ -296,12 +296,7 @@ input:checked+.tog-sl::before{transform:translateX(19px);background:white}
 .f-lbl{font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px}
 .f-txt{font-size:15px;color:var(--t1);line-height:1.65;font-style:italic}
 .f-link{display:block;margin-top:12px;font-size:13px;color:var(--gold);text-decoration:none;font-style:normal}
-.call-card{background:var(--card);border:1px solid var(--bdr);border-radius:18px;padding:18px}
-.call-credit{font-size:11px;color:var(--t3);margin-top:8px;line-height:1.5}
-.xc-link{display:block;padding:13px 16px;background:var(--elev);border:1px solid var(--bdr);
-  border-radius:12px;color:var(--gold);text-decoration:none;font-size:14px;
-  text-align:center;touch-action:manipulation;transition:background .15s}
-.xc-link:active{background:var(--bg)}
+.xc-link{display:none}
 .btn{width:100%;background:var(--gold);border:none;border-radius:var(--r);padding:14px;
   color:var(--bg);font-family:'Playfair Display',serif;font-size:15px;font-weight:700;
   letter-spacing:.3px;cursor:pointer;transition:all .18s;touch-action:manipulation}
@@ -476,7 +471,6 @@ input:checked+.tog-sl::before{transform:translateX(19px);background:white}
       <div class="about-card">
         <div>🧠 BirdNET AI — Cornell Lab & TU Chemnitz</div>
         <div>📖 Info from iNaturalist & Wikipedia</div>
-        <div>🎵 Bird calls from xeno-canto</div>
         <div>🗺 Maps from OpenStreetMap via Leaflet</div>
         <div style="margin-top:10px;color:var(--gold)">100% free · No account · AI runs on your device</div>
       </div>
@@ -851,10 +845,49 @@ async function runInference(raw){
 }
 
 /* ════════════════════════════════════════════════
-   CONSERVATION STATUS — FIX: iNaturalist + Wikipedia fallback
-   Many species have no status on iNat; Wikipedia extract
-   almost always mentions IUCN status for birds.
+   CONSERVATION STATUS
+   3-source lookup: iNaturalist → Wikipedia (sci name)
+   → Wikipedia (common name). Handles all iNat status
+   formats: "LC", "lc", "least concern", etc.
 ════════════════════════════════════════════════ */
+
+/* Map verbose IUCN strings → 2-letter codes */
+const IUCN_WORDS={
+  'least concern':'LC','near threatened':'NT','vulnerable':'VU',
+  'endangered':'EN','critically endangered':'CR',
+  'extinct in the wild':'EW','extinct':'EX','data deficient':'DD'
+};
+
+function parseIUCNStr(raw){
+  if(!raw) return '';
+  const s=raw.trim();
+  // Already a 2-letter code?
+  const up=s.toUpperCase();
+  if(IUCN_CODES.has(up)) return up;
+  // Full phrase (case-insensitive, longest match first)
+  const lo=s.toLowerCase();
+  for(const [phrase,code] of Object.entries(IUCN_WORDS)){
+    if(lo===phrase||lo.startsWith(phrase)) return code;
+  }
+  // Abbreviated like "lc","vu" etc
+  if(IUCN_CODES.has(up.slice(0,2))) return up.slice(0,2);
+  return '';
+}
+
+function extractIUCNFromText(txt){
+  const lo=txt.toLowerCase();
+  // Order matters — check more specific first
+  if(lo.includes('extinct in the wild'))  return 'EW';
+  if(lo.includes('critically endangered'))return 'CR';
+  if(lo.includes('endangered'))           return 'EN';
+  if(lo.includes('vulnerable'))           return 'VU';
+  if(lo.includes('near threatened'))      return 'NT';
+  if(lo.includes('least concern'))        return 'LC';
+  if(lo.includes('data deficient'))       return 'DD';
+  if(lo.includes('extinct'))              return 'EX';
+  return '';
+}
+
 function getCS(sci){
   if(csCache[sci]!==undefined) return Promise.resolve(csCache[sci]);
   if(csFetching[sci]) return csFetching[sci];
@@ -862,47 +895,66 @@ function getCS(sci){
   csFetching[sci]=(async()=>{
     let code='';
 
-    /* 1. Try iNaturalist first */
+    /* 1. iNaturalist — search by exact scientific name */
     try{
-      const r=await fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(sci)}&rank=species&per_page=1`);
+      const r=await fetch(
+        `https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(sci)}&rank=species&per_page=3`,
+        {signal:AbortSignal.timeout(6000)}
+      );
       if(r.ok){
         const d=await r.json();
-        const t=d.results?.[0];
+        // Find the taxon whose name best matches
+        const t=d.results?.find(x=>
+          x.name?.toLowerCase()===sci.toLowerCase()
+        )||d.results?.[0];
         if(t){
-          // Singular conservation_status
-          if(t.conservation_status?.status)
-            code=t.conservation_status.status.toUpperCase().slice(0,2).trim();
-          // Array of statuses — prefer global (no place_id)
+          // iNat returns conservation_status as a singular object on the taxon
+          if(t.conservation_status?.status_name||t.conservation_status?.status){
+            code=parseIUCNStr(t.conservation_status.status_name||t.conservation_status.status);
+          }
+          // Some responses include conservation_statuses array — prefer global (no place_id)
           if(!IUCN_CODES.has(code)){
             const arr=t.conservation_statuses||[];
-            const g=arr.find(s=>!s.place_id)||arr[0];
-            if(g?.status) code=g.status.toUpperCase().slice(0,2).trim();
+            const g=arr.find(s=>!s.place_id&&s.authority==='IUCN')||
+                    arr.find(s=>!s.place_id)||arr[0];
+            if(g) code=parseIUCNStr(g.status_name||g.status);
           }
         }
       }
     }catch(e){}
 
-    /* 2. Wikipedia text fallback — parses IUCN keywords from extract */
+    /* 2. Wikipedia by scientific name (most reliable for birds) */
     if(!IUCN_CODES.has(code)){
       try{
-        const comName=labels.find(l=>l.sci===sci)?.com||sci;
-        const r=await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(comName)}`);
+        const r=await fetch(
+          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(sci)}`,
+          {signal:AbortSignal.timeout(6000)}
+        );
         if(r.ok){
           const d=await r.json();
-          const txt=(d.extract||'').toLowerCase();
-          if(txt.includes('critically endangered'))      code='CR';
-          else if(txt.includes('endangered'))            code='EN';
-          else if(txt.includes('vulnerable'))            code='VU';
-          else if(txt.includes('near threatened'))       code='NT';
-          else if(txt.includes('least concern'))         code='LC';
-          else if(txt.includes('data deficient'))        code='DD';
-          else if(txt.includes('extinct in the wild'))   code='EW';
-          else if(txt.includes('extinct'))               code='EX';
+          code=extractIUCNFromText(d.extract||'');
         }
       }catch(e){}
     }
 
-    csCache[sci]=IUCN_CODES.has(code)?code:'';
+    /* 3. Wikipedia by common name fallback */
+    if(!IUCN_CODES.has(code)){
+      try{
+        const comName=labels.find(l=>l.sci===sci)?.com||'';
+        if(comName&&comName!==sci){
+          const r=await fetch(
+            `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(comName)}`,
+            {signal:AbortSignal.timeout(6000)}
+          );
+          if(r.ok){
+            const d=await r.json();
+            code=extractIUCNFromText(d.extract||'');
+          }
+        }
+      }catch(e){}
+    }
+
+    csCache[sci]=IUCN_CODES.has(code)?code:'LC'; // default LC for unlisted common birds
     delete csFetching[sci];
     return csCache[sci];
   })();
@@ -947,13 +999,14 @@ function addDetection(lbl,score){
   const feed=document.getElementById('feed');
   document.getElementById('emptyState')?.remove();
 
-  const pct=Math.round(score*100); // now correct 0-100
+  const pct=Math.round(score*100);
   const cls=pct>=70?'hi':pct>=35?'md':'lo';
   const color=pct>=70?'var(--gold2)':pct>=35?'var(--sage2)':'var(--t2)';
   const time=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 
   const iucn=existingCS?IUCN[existingCS]:null;
-  const badgeHtml=`<span class="cs-mini${iucn?' show '+iucn.cls:''}" data-sci="${esc(lbl.sci)}">${existingCS}</span>`;
+  const cardId='card-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+  const badgeHtml=`<span class="cs-mini${iucn?' show '+iucn.cls:''}" id="${cardId}-badge" data-sci="${esc(lbl.sci)}">${existingCS}</span>`;
 
   const card=document.createElement('div');
   card.className='det';
@@ -973,17 +1026,25 @@ function addDetection(lbl,score){
   while(feed.children.length>60) feed.removeChild(feed.lastChild);
 
   // Fetch conservation status async and update badge
-  if(!existingCS){
-    getCS(lbl.sci).then(code=>{
-      if(!code) return;
-      applyCSBadge(lbl.sci,code);
-      // Patch history entries for this species
-      const h=loadHistory();
-      let changed=false;
-      h.forEach(d=>{if(d.sci===lbl.sci&&!d.cs){d.cs=code;changed=true;}});
-      if(changed) saveHistory(h);
-    });
-  }
+  getCS(lbl.sci).then(code=>{
+    if(!code) return;
+    // Update this specific card's badge
+    const badge=document.getElementById(cardId+'-badge');
+    if(badge){
+      const iucn=IUCN[code];
+      if(iucn){
+        badge.className=`cs-mini show ${iucn.cls}`;
+        badge.textContent=code;
+      }
+    }
+    // Also update any other visible cards for same species
+    applyCSBadge(lbl.sci,code);
+    // Patch history entries for this species
+    const h=loadHistory();
+    let changed=false;
+    h.forEach(d=>{if(d.sci===lbl.sci&&!d.cs){d.cs=code;changed=true;}});
+    if(changed) saveHistory(h);
+  });
 }
 
 function clearFeed(){
@@ -1172,10 +1233,19 @@ async function openInfo(lbl){
        <div style="margin-top:14px;color:var(--t2);font-style:italic;font-size:15px">Fetching field notes…</div>
      </div>`;
   const[iR,wR]=await Promise.allSettled([
-    fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(lbl.sci)}&rank=species&per_page=1`).then(r=>r.json()).catch(()=>null),
-    fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(lbl.com)}`).then(r=>r.ok?r.json():null).catch(()=>null)
+    fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(lbl.sci)}&rank=species&per_page=3`).then(r=>r.json()).catch(()=>null),
+    (async()=>{
+      // Try common name first, then scientific name
+      let r=await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(lbl.com)}`).catch(()=>null);
+      if(r?.ok) return r.json();
+      r=await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(lbl.sci)}`).catch(()=>null);
+      return r?.ok?r.json():null;
+    })()
   ]);
-  renderInfo(lbl,iR.value?.results?.[0]||null,wR.value||null);
+  // Find best iNat match for scientific name
+  const inatResults=iR.value?.results||[];
+  const inatTaxon=inatResults.find(x=>x.name?.toLowerCase()===lbl.sci.toLowerCase())||inatResults[0]||null;
+  renderInfo(lbl,inatTaxon,wR.value||null);
 }
 
 
@@ -1189,24 +1259,14 @@ function renderInfo(lbl,inat,wiki){
   let code='';
   if(inat){
     const cs=inat.conservation_status;
-    if(cs?.status) code=cs.status.toUpperCase().slice(0,2).trim();
+    if(cs?.status_name||cs?.status) code=parseIUCNStr(cs.status_name||cs.status);
     if(!IUCN_CODES.has(code)){
       const arr=inat.conservation_statuses||[];
-      const g=arr.find(s=>!s.place_id)||arr[0];
-      if(g?.status) code=g.status.toUpperCase().slice(0,2).trim();
+      const g=arr.find(s=>!s.place_id&&s.authority==='IUCN')||arr.find(s=>!s.place_id)||arr[0];
+      if(g) code=parseIUCNStr(g.status_name||g.status);
     }
   }
-  if(!IUCN_CODES.has(code)){
-    const txt=extract.toLowerCase();
-    if(txt.includes('critically endangered'))     code='CR';
-    else if(txt.includes('endangered'))           code='EN';
-    else if(txt.includes('vulnerable'))           code='VU';
-    else if(txt.includes('near threatened'))      code='NT';
-    else if(txt.includes('least concern'))        code='LC';
-    else if(txt.includes('data deficient'))       code='DD';
-    else if(txt.includes('extinct in the wild'))  code='EW';
-    else if(txt.includes('extinct'))              code='EX';
-  }
+  if(!IUCN_CODES.has(code)) code=extractIUCNFromText(extract);
   if(!IUCN_CODES.has(code)) code=csCache[lbl.sci]||'';
 
   const iucn=IUCN[code]||null;
@@ -1234,17 +1294,9 @@ function renderInfo(lbl,inat,wiki){
   if(habitat)   tiles+=mkTile('','🌿 Habitat',habitat);
   if(wingspan)  tiles+=mkTile('','📐 Wingspan',wingspan);
 
-  const about=extract.length>300?extract.slice(0,300).replace(/\s\S+$/,'')+'…':extract;
+  const about=extract.length>500?extract.slice(0,500).replace(/\s\S+$/,'')+'…':extract;
   const wikiUrl=wiki?.content_urls?.desktop?.page||null;
-  const xcSearch=`https://xeno-canto.org/explore?query=${encodeURIComponent(lbl.sci)}`;
-
-  const callHtml=`<div class="call-card">
-      <div class="f-lbl">🎵 Bird Call</div>
-      <a href="${esc(xcSearch)}" target="_blank" class="xc-link">
-        ▶&nbsp; Listen to ${esc(lbl.com)} calls on xeno-canto
-      </a>
-      <div class="call-credit" style="margin-top:8px">Opens xeno-canto.org · world's largest bird sound archive</div>
-    </div>`;
+  const callHtml='';
 
   const hist=loadHistory();
   const myCount=hist.filter(d=>d.sci===lbl.sci).length;
