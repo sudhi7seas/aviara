@@ -164,6 +164,43 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .cr{background:rgba(155,35,24,.95);color:#fff}
 .dd{background:rgba(90,90,90,.88);color:#fff}
 
+/* ══ TIMBRE ═════════════════════════════════════ */
+#TI{padding:0;justify-content:flex-start;
+  padding-bottom:calc(var(--tab) + env(safe-area-inset-bottom))}
+.ti-topbar{display:flex;justify-content:space-between;align-items:center;width:100%;
+  padding:10px 16px;padding-top:max(10px,env(safe-area-inset-top)+4px);flex-shrink:0;
+  position:relative;z-index:2}
+.ti-logo{font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--gold)}
+.chirp-flash{font-size:10px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;
+  color:var(--gold2);opacity:0;transition:opacity .12s;padding:4px 10px;
+  background:rgba(200,151,42,.12);border-radius:8px;border:1px solid rgba(200,151,42,.3)}
+.chirp-flash.on{opacity:1}
+.ti-body{flex:1;display:flex;flex-direction:column;width:100%;min-height:0;position:relative}
+#timbreCanvas{width:100%;flex:1;display:block;min-height:0;touch-action:none}
+.ti-panels{display:flex;width:100%;gap:0;flex-shrink:0}
+.ti-panel{flex:1;background:var(--srf);padding:8px 10px;
+  border-top:1px solid var(--bdr);display:flex;flex-direction:column;gap:5px}
+.ti-panel+.ti-panel{border-left:1px solid var(--bdr)}
+.ti-panel-ttl{font-size:8px;color:var(--t3);text-transform:uppercase;letter-spacing:1.6px;margin-bottom:3px}
+.ti-row{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.ti-lbl{font-size:10px;color:var(--t2);flex-shrink:0;min-width:52px}
+.ti-bar-wrap{flex:1;height:5px;background:var(--elev);border-radius:99px;overflow:hidden}
+.ti-bar{height:100%;border-radius:99px;transition:width .1s;width:0%}
+.ti-val{font-size:10px;font-family:'Playfair Display',serif;font-weight:700;
+  color:var(--gold2);min-width:36px;text-align:right;flex-shrink:0}
+.call-badge{display:inline-block;padding:3px 10px;border-radius:8px;font-size:11px;
+  font-weight:800;letter-spacing:1px;text-transform:uppercase;text-align:center;
+  background:var(--elev);color:var(--t3);border:1px solid var(--bdr);
+  transition:all .2s;min-width:110px}
+.call-badge.alarm{background:rgba(224,80,80,.18);color:#ff7070;border-color:rgba(224,80,80,.4)}
+.call-badge.distress{background:rgba(155,35,24,.22);color:#ff5555;border-color:rgba(155,35,24,.5)}
+.call-badge.mating{background:rgba(200,151,42,.18);color:var(--gold2);border-color:rgba(200,151,42,.4)}
+.call-badge.contact{background:rgba(87,150,106,.18);color:var(--sage2);border-color:rgba(87,150,106,.4)}
+.call-badge.ambient{background:var(--elev);color:var(--t3);border-color:var(--bdr)}
+.call-badge.silence{background:transparent;color:var(--t3);border-color:transparent}
+.ti-chirps{font-size:10px;color:var(--t2);text-align:center;margin-top:2px}
+.ti-chirps span{font-family:'Playfair Display',serif;color:var(--gold2);font-size:13px}
+
 /* ══ STATS ══════════════════════════════════════ */
 #ST{padding:0;justify-content:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch;
   padding-bottom:calc(var(--tab) + env(safe-area-inset-bottom))}
@@ -367,6 +404,71 @@ input:checked+.tog-sl::before{transform:translateX(19px);background:white}
   </div>
   <div class="tbar">
     <div class="tb act" data-tab="LI" onclick="goTab('LI')"><span class="ti">🎙</span><span class="tl">Listen</span></div>
+    <div class="tb" data-tab="TI" onclick="goTab('TI')"><span class="ti">🌀</span><span class="tl">Timbre</span></div>
+    <div class="tb" data-tab="ST" onclick="goTab('ST')"><span class="ti">📊</span><span class="tl">Stats</span></div>
+    <div class="tb" data-tab="MA" onclick="goTab('MA')"><span class="ti">🗺</span><span class="tl">Map</span></div>
+    <div class="tb" data-tab="SE" onclick="goTab('SE')"><span class="ti">⚙️</span><span class="tl">Settings</span></div>
+  </div>
+</div>
+
+<!-- ══ TIMBRE ════════════════════════════════════ -->
+<div id="TI" class="scr off">
+  <div class="ti-topbar">
+    <div class="ti-logo">🌀 Timbre Space</div>
+    <div class="chirp-flash" id="chirpFlash">⚡ CHIRP DETECTED</div>
+    <div class="icobtn" onclick="clearTimbreTrail()" title="Clear trail">✕</div>
+  </div>
+  <div class="ti-body">
+    <canvas id="timbreCanvas"></canvas>
+    <div class="ti-panels">
+      <!-- Left panel: acoustic descriptors -->
+      <div class="ti-panel">
+        <div class="ti-panel-ttl">📡 Acoustic Signal</div>
+        <div class="ti-row">
+          <div class="ti-lbl">Centroid</div>
+          <div class="ti-bar-wrap"><div class="ti-bar" id="tbCentroid" style="background:var(--gold2)"></div></div>
+          <div class="ti-val" id="tvCentroid">—</div>
+        </div>
+        <div class="ti-row">
+          <div class="ti-lbl">Spread</div>
+          <div class="ti-bar-wrap"><div class="ti-bar" id="tbSpread" style="background:var(--sage2)"></div></div>
+          <div class="ti-val" id="tvSpread">—</div>
+        </div>
+        <div class="ti-row">
+          <div class="ti-lbl">Flux</div>
+          <div class="ti-bar-wrap"><div class="ti-bar" id="tbFlux" style="background:#80aaff"></div></div>
+          <div class="ti-val" id="tvFlux">—</div>
+        </div>
+        <div class="ti-row">
+          <div class="ti-lbl">Flatness</div>
+          <div class="ti-bar-wrap"><div class="ti-bar" id="tbFlat" style="background:#c08060"></div></div>
+          <div class="ti-val" id="tvFlat">—</div>
+        </div>
+        <div class="ti-row">
+          <div class="ti-lbl">Tonality</div>
+          <div class="ti-bar-wrap"><div class="ti-bar" id="tbTonality" style="background:#70d0ff"></div></div>
+          <div class="ti-val" id="tvTonality">—</div>
+        </div>
+        <div class="ti-row">
+          <div class="ti-lbl">Energy</div>
+          <div class="ti-bar-wrap"><div class="ti-bar" id="tbRMS" style="background:var(--red)"></div></div>
+          <div class="ti-val" id="tvRMS">—</div>
+        </div>
+      </div>
+      <!-- Right panel: classification -->
+      <div class="ti-panel" style="align-items:center;justify-content:center;gap:8px">
+        <div class="ti-panel-ttl" style="text-align:center">🧠 Call Analysis</div>
+        <div class="call-badge silence" id="callBadge">SILENCE</div>
+        <div class="ti-chirps">Chirps detected: <span id="chirpCount">0</span></div>
+        <div style="font-size:9px;color:var(--t3);text-align:center;line-height:1.6;margin-top:2px">
+          X-axis: Centroid (brightness)<br>Y-axis: Spread (noise width)
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="tbar">
+    <div class="tb" data-tab="LI" onclick="goTab('LI')"><span class="ti">🎙</span><span class="tl">Listen</span></div>
+    <div class="tb act" data-tab="TI" onclick="goTab('TI')"><span class="ti">🌀</span><span class="tl">Timbre</span></div>
     <div class="tb" data-tab="ST" onclick="goTab('ST')"><span class="ti">📊</span><span class="tl">Stats</span></div>
     <div class="tb" data-tab="MA" onclick="goTab('MA')"><span class="ti">🗺</span><span class="tl">Map</span></div>
     <div class="tb" data-tab="SE" onclick="goTab('SE')"><span class="ti">⚙️</span><span class="tl">Settings</span></div>
@@ -382,6 +484,7 @@ input:checked+.tog-sl::before{transform:translateX(19px);background:white}
   <div class="st-body" id="stBody"></div>
   <div class="tbar">
     <div class="tb" data-tab="LI" onclick="goTab('LI')"><span class="ti">🎙</span><span class="tl">Listen</span></div>
+    <div class="tb" data-tab="TI" onclick="goTab('TI')"><span class="ti">🌀</span><span class="tl">Timbre</span></div>
     <div class="tb act" data-tab="ST" onclick="goTab('ST')"><span class="ti">📊</span><span class="tl">Stats</span></div>
     <div class="tb" data-tab="MA" onclick="goTab('MA')"><span class="ti">🗺</span><span class="tl">Map</span></div>
     <div class="tb" data-tab="SE" onclick="goTab('SE')"><span class="ti">⚙️</span><span class="tl">Settings</span></div>
@@ -402,6 +505,7 @@ input:checked+.tog-sl::before{transform:translateX(19px);background:white}
   </div>
   <div class="tbar">
     <div class="tb" data-tab="LI" onclick="goTab('LI')"><span class="ti">🎙</span><span class="tl">Listen</span></div>
+    <div class="tb" data-tab="TI" onclick="goTab('TI')"><span class="ti">🌀</span><span class="tl">Timbre</span></div>
     <div class="tb" data-tab="ST" onclick="goTab('ST')"><span class="ti">📊</span><span class="tl">Stats</span></div>
     <div class="tb act" data-tab="MA" onclick="goTab('MA')"><span class="ti">🗺</span><span class="tl">Map</span></div>
     <div class="tb" data-tab="SE" onclick="goTab('SE')"><span class="ti">⚙️</span><span class="tl">Settings</span></div>
@@ -478,6 +582,7 @@ input:checked+.tog-sl::before{transform:translateX(19px);background:white}
   </div>
   <div class="tbar">
     <div class="tb" data-tab="LI" onclick="goTab('LI')"><span class="ti">🎙</span><span class="tl">Listen</span></div>
+    <div class="tb" data-tab="TI" onclick="goTab('TI')"><span class="ti">🌀</span><span class="tl">Timbre</span></div>
     <div class="tb" data-tab="ST" onclick="goTab('ST')"><span class="ti">📊</span><span class="tl">Stats</span></div>
     <div class="tb" data-tab="MA" onclick="goTab('MA')"><span class="ti">🗺</span><span class="tl">Map</span></div>
     <div class="tb act" data-tab="SE" onclick="goTab('SE')"><span class="ti">⚙️</span><span class="tl">Settings</span></div>
@@ -583,6 +688,7 @@ window.addEventListener('load', async () => {
     setStep(3,true); setProg(100);
     await sleep(300);
     setupCanvases();
+    setupTimbreCanvas();
     applySett();
     show('LI');
     document.addEventListener('visibilitychange',async()=>{
@@ -751,6 +857,7 @@ async function startListen(){
     listening=true; hasStopped=false;
     setListenUI('recording');
     clearSpec(); startSpecLoop();
+    if(timbreActive) startTimbreLoop();
 
   }catch(e){
     // Cleanup on failure
@@ -778,6 +885,7 @@ function stopListen(){
   try{stopLocation();}catch(e){}
   try{releaseWakeLock();}catch(e){}
   try{stopSpecLoop();idleWave();}catch(e){}
+  try{stopTimbreLoop();drawTimbreIdle();}catch(e){}
   hasStopped=true;
   // This always runs regardless of errors above
   setListenUI('stopped');
@@ -1490,6 +1598,340 @@ function clearAllData(){
 }
 
 /* ════════════════════════════════════════════════
+   TIMBRE SPACE ENGINE
+   Real-time acoustic fingerprint visualizer.
+   Computes 6 descriptors from the existing analyser
+   node and renders a glowing trail in timbre space.
+════════════════════════════════════════════════ */
+
+/* ── Constants ── */
+const SILENCE_FLOOR = 0.008;  // RMS below this = silence
+const FLUX_THRESH   = 0.012;  // spectral flux onset threshold
+const TRAIL_MAX     = 120;    // how many trail points to keep
+
+/* ── State ── */
+let timbreTrail   = [];       // [{x,y,rms,tonality,flux,centroid}]
+let timbreRaf     = null;
+let timbreCanvas  = null;
+let timbreCtx     = null;
+let prevMags      = null;     // previous frame magnitudes for flux
+let autoMin       = {cx:99999,sp:99999};
+let autoMax       = {cx:0,sp:0};
+let chirpCount    = 0;
+let chirpFlashTmr = null;
+let timbreActive  = false;    // true while TI tab is visible
+
+/* ── Setup timbre canvas (called after boot) ── */
+function setupTimbreCanvas(){
+  timbreCanvas = document.getElementById('timbreCanvas');
+  if(!timbreCanvas) return;
+  timbreCtx = timbreCanvas.getContext('2d');
+  resizeTimbreCanvas();
+  window.addEventListener('resize', resizeTimbreCanvas);
+}
+function resizeTimbreCanvas(){
+  if(!timbreCanvas) return;
+  const rect = timbreCanvas.getBoundingClientRect();
+  timbreCanvas.width  = rect.width  || window.innerWidth;
+  timbreCanvas.height = rect.height || 260;
+  drawTimbreIdle();
+}
+
+/* ── Clear trail button ── */
+function clearTimbreTrail(){
+  timbreTrail = [];
+  prevMags    = null;
+  autoMin     = {cx:99999,sp:99999};
+  autoMax     = {cx:0,sp:0};
+  chirpCount  = 0;
+  document.getElementById('chirpCount').textContent = '0';
+  drawTimbreIdle();
+  updateTimbreUI(null);
+}
+
+/* ── Compute acoustic descriptors from frequency data ── */
+function computeDescriptors(freqData, timeData, sampleRate){
+  const binHz = sampleRate / 2048;
+  // Focus on bird frequency range: ~500 Hz – 10000 Hz
+  const lo = Math.floor(500  / binHz);
+  const hi = Math.min(Math.floor(10000 / binHz), freqData.length - 1);
+
+  // Convert dB → linear magnitude
+  const mags = new Float32Array(hi - lo + 1);
+  let magSum = 0, logMagSum = 0;
+  for(let i = lo; i <= hi; i++){
+    const m = Math.pow(10, freqData[i] / 20);
+    mags[i - lo] = m;
+    magSum    += m;
+    logMagSum += Math.log(m + 1e-10);
+  }
+  if(magSum < 1e-10) return null; // silence
+
+  // Spectral Centroid (Hz)
+  let centroid = 0;
+  for(let i = 0; i < mags.length; i++){
+    centroid += (lo + i) * binHz * mags[i];
+  }
+  centroid /= magSum;
+
+  // Spectral Spread (Hz)
+  let spread = 0;
+  for(let i = 0; i < mags.length; i++){
+    const diff = (lo + i) * binHz - centroid;
+    spread += diff * diff * mags[i];
+  }
+  spread = Math.sqrt(spread / magSum);
+
+  // Spectral Flux (onset detector, positive only)
+  let flux = 0;
+  if(prevMags && prevMags.length === mags.length){
+    for(let i = 0; i < mags.length; i++){
+      const d = mags[i] - prevMags[i];
+      if(d > 0) flux += d;
+    }
+    flux /= mags.length;
+  }
+  prevMags = mags.slice();
+
+  // Spectral Flatness (0=tonal, 1=noise)
+  const geoMean = Math.exp(logMagSum / mags.length);
+  const arithMean = magSum / mags.length;
+  const flatness = Math.min(1, geoMean / (arithMean + 1e-10));
+
+  // Tonality (1=musical, 0=noise)
+  const tonality = Math.max(0, Math.min(1, 1 - flatness * 4));
+
+  // RMS Energy from time-domain data
+  let rmsSum = 0;
+  for(let i = 0; i < timeData.length; i++){
+    const v = (timeData[i] / 128) - 1;
+    rmsSum += v * v;
+  }
+  const rms = Math.sqrt(rmsSum / timeData.length);
+
+  return {centroid, spread, flux, flatness, tonality, rms};
+}
+
+/* ── Heuristic call-type classifier ── */
+function classifyCall(f){
+  if(f.rms < SILENCE_FLOOR)      return 'SILENCE';
+  const hi     = f.centroid > 5000;
+  const sharp  = f.flux > FLUX_THRESH * 1.5;
+  const broad  = f.flatness > 0.15;
+  const tonal  = f.tonality > 0.60;
+  if(sharp && hi && !broad)      return 'ALARM CALL';
+  if(sharp && broad)             return 'DISTRESS';
+  if(tonal && hi)                return 'MATING SONG';
+  if(tonal && !hi)               return 'CONTACT';
+  return 'AMBIENT';
+}
+
+/* ── Map call type → badge CSS class ── */
+function callClass(label){
+  if(label==='ALARM CALL')  return 'alarm';
+  if(label==='DISTRESS')    return 'distress';
+  if(label==='MATING SONG') return 'mating';
+  if(label==='CONTACT')     return 'contact';
+  if(label==='SILENCE')     return 'silence';
+  return 'ambient';
+}
+
+/* ── Update side panels ── */
+function updateTimbreUI(f){
+  if(!f){
+    ['Centroid','Spread','Flux','Flat','Tonality','RMS'].forEach(k=>{
+      const b=document.getElementById('tb'+k), v=document.getElementById('tv'+k);
+      if(b) b.style.width='0%'; if(v) v.textContent='—';
+    });
+    const badge=document.getElementById('callBadge');
+    if(badge){badge.textContent='SILENCE';badge.className='call-badge silence';}
+    return;
+  }
+  // Centroid: 500–10000 Hz → 0–100%
+  const cx = ((f.centroid - 500) / 9500) * 100;
+  setBar('Centroid', cx, (f.centroid/1000).toFixed(1)+'k');
+  // Spread: 0–5000 Hz → 0–100%
+  const sp = (f.spread / 5000) * 100;
+  setBar('Spread', sp, (f.spread/1000).toFixed(1)+'k');
+  // Flux: 0–0.05 → 0–100%
+  setBar('Flux', Math.min(100, f.flux / 0.05 * 100), f.flux.toFixed(3));
+  // Flatness: 0–1 → 0–100%
+  setBar('Flat', f.flatness * 100, f.flatness.toFixed(2));
+  // Tonality: 0–1 → 0–100%
+  setBar('Tonality', f.tonality * 100, f.tonality.toFixed(2));
+  // RMS: 0–0.3 → 0–100%
+  setBar('RMS', Math.min(100, f.rms / 0.3 * 100), f.rms.toFixed(3));
+
+  const label = classifyCall(f);
+  const badge = document.getElementById('callBadge');
+  if(badge){ badge.textContent = label; badge.className = 'call-badge ' + callClass(label); }
+}
+function setBar(key, pct, val){
+  const b = document.getElementById('tb'+key);
+  const v = document.getElementById('tv'+key);
+  if(b) b.style.width = Math.max(0, Math.min(100, pct)) + '%';
+  if(v) v.textContent = val;
+}
+
+/* ── Main render loop (feeds from existing analyser) ── */
+function startTimbreLoop(){
+  if(timbreRaf) cancelAnimationFrame(timbreRaf);
+  (function frame(){
+    timbreRaf = requestAnimationFrame(frame);
+    if(!analyser || !timbreCtx) return;
+
+    const freqData  = new Float32Array(analyser.frequencyBinCount);
+    const timeData  = new Uint8Array(analyser.fftSize);
+    analyser.getFloatFrequencyData(freqData);
+    analyser.getByteTimeDomainData(timeData);
+
+    const f = computeDescriptors(freqData, timeData, nativeSR || 48000);
+    updateTimbreUI(f || null);
+    if(!f || f.rms < SILENCE_FLOOR){ renderTimbreCanvas(); return; }
+
+    // Detect chirp onset
+    if(f.flux > FLUX_THRESH && f.rms > SILENCE_FLOOR * 2){
+      chirpCount++;
+      document.getElementById('chirpCount').textContent = chirpCount;
+      const flash = document.getElementById('chirpFlash');
+      if(flash){ flash.classList.add('on'); clearTimeout(chirpFlashTmr);
+        chirpFlashTmr = setTimeout(()=>flash.classList.remove('on'), 600); }
+    }
+
+    // Auto-range: update seen min/max for centroid & spread
+    if(f.centroid < autoMin.cx) autoMin.cx = f.centroid;
+    if(f.centroid > autoMax.cx) autoMax.cx = f.centroid;
+    if(f.spread   < autoMin.sp) autoMin.sp = f.spread;
+    if(f.spread   > autoMax.sp) autoMax.sp = f.spread;
+
+    const W = timbreCanvas.width, H = timbreCanvas.height;
+    const pad = 28;
+    const cxRange = Math.max(autoMax.cx - autoMin.cx, 1000);
+    const spRange = Math.max(autoMax.sp - autoMin.sp, 500);
+    const px = pad + ((f.centroid - autoMin.cx) / cxRange) * (W - pad*2);
+    const py = H - pad - ((f.spread   - autoMin.sp) / spRange) * (H - pad*2);
+
+    timbreTrail.push({x:px, y:py, rms:f.rms, tonality:f.tonality, flux:f.flux});
+    if(timbreTrail.length > TRAIL_MAX) timbreTrail.shift();
+
+    renderTimbreCanvas();
+  })();
+}
+function stopTimbreLoop(){
+  cancelAnimationFrame(timbreRaf); timbreRaf = null;
+}
+
+/* ── Canvas renderer ── */
+function renderTimbreCanvas(){
+  if(!timbreCtx || !timbreCanvas) return;
+  const W = timbreCanvas.width, H = timbreCanvas.height;
+  const ctx = timbreCtx;
+
+  // Dark background with subtle grid
+  ctx.fillStyle = '#020a02';
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(200,151,42,0.06)';
+  ctx.lineWidth = 1;
+  for(let i=1;i<5;i++){
+    ctx.beginPath(); ctx.moveTo(W*i/5, 0); ctx.lineTo(W*i/5, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, H*i/5); ctx.lineTo(W, H*i/5); ctx.stroke();
+  }
+
+  // Axis labels
+  ctx.font = '8px monospace'; ctx.fillStyle = 'rgba(200,151,42,0.22)';
+  ctx.textAlign = 'center'; ctx.fillText('← Low Centroid · High Centroid →', W/2, H-4);
+  ctx.save(); ctx.translate(8, H/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText('← Narrow · Spread Wide →', 0, 0); ctx.restore();
+
+  if(timbreTrail.length < 2){ drawTimbreIdle(); return; }
+
+  const n = timbreTrail.length;
+
+  // Long-range connector lines (global structure of call)
+  const step = Math.max(1, Math.floor(n / 5));
+  ctx.strokeStyle = 'rgba(100,180,120,0.10)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  for(let i = 0; i + step < n; i += step){
+    ctx.moveTo(timbreTrail[i].x, timbreTrail[i].y);
+    ctx.lineTo(timbreTrail[i+step].x, timbreTrail[i+step].y);
+  }
+  ctx.stroke();
+
+  // Trail connector line (recent path)
+  for(let i = 1; i < n; i++){
+    const age    = i / n;               // 0=oldest, 1=newest
+    const pt     = timbreTrail[i];
+    const prev   = timbreTrail[i-1];
+    const tone   = pt.tonality || 0;
+    // colour: warm (alarm/noise) → cool (tonal/mating)
+    const r = Math.round(220 - tone * 160);
+    const g = Math.round(120 + tone * 100);
+    const b = Math.round(40  + tone * 200);
+    ctx.strokeStyle = `rgba(${r},${g},${b},${age * 0.6})`;
+    ctx.lineWidth = 1 + age * 1.5;
+    ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.lineTo(pt.x, pt.y); ctx.stroke();
+  }
+
+  // Nodes (newest 30 points)
+  const visible = timbreTrail.slice(-30);
+  visible.forEach((pt, i)=>{
+    const age    = (i+1) / visible.length;
+    const tone   = pt.tonality || 0;
+    const r = Math.round(220 - tone * 160);
+    const g = Math.round(120 + tone * 100);
+    const b = Math.round(40  + tone * 200);
+    const radius = Math.max(2.5, Math.min(10, pt.rms * 80 + 2));
+
+    // Outer glow
+    if(age > 0.6){
+      const grd = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, radius * 3.5);
+      grd.addColorStop(0, `rgba(${r},${g},${b},${age*0.25})`);
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grd;
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, radius * 3.5, 0, Math.PI*2); ctx.fill();
+    }
+
+    // Core dot
+    ctx.fillStyle = `rgba(${r},${g},${b},${0.3 + age * 0.7})`;
+    ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, Math.PI*2); ctx.fill();
+
+    // White hot centre on newest node
+    if(i === visible.length - 1){
+      ctx.fillStyle = `rgba(255,255,255,0.85)`;
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, Math.max(1.5, radius*0.4), 0, Math.PI*2); ctx.fill();
+    }
+  });
+}
+
+/* ── Idle state drawing ── */
+function drawTimbreIdle(){
+  if(!timbreCtx || !timbreCanvas) return;
+  const W = timbreCanvas.width, H = timbreCanvas.height;
+  const ctx = timbreCtx;
+  ctx.fillStyle = '#020a02';
+  ctx.fillRect(0, 0, W, H);
+  // Grid
+  ctx.strokeStyle = 'rgba(200,151,42,0.06)'; ctx.lineWidth = 1;
+  for(let i=1;i<5;i++){
+    ctx.beginPath(); ctx.moveTo(W*i/5,0); ctx.lineTo(W*i/5,H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,H*i/5); ctx.lineTo(W,H*i/5); ctx.stroke();
+  }
+  ctx.font = '8px monospace'; ctx.fillStyle = 'rgba(200,151,42,0.22)';
+  ctx.textAlign = 'center'; ctx.fillText('← Low Centroid · High Centroid →', W/2, H-4);
+  ctx.save(); ctx.translate(8, H/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText('← Narrow · Spread Wide →', 0, 0); ctx.restore();
+  // Placeholder text
+  ctx.font = '13px serif'; ctx.fillStyle = 'rgba(165,151,120,0.28)';
+  ctx.textAlign = 'center';
+  ctx.fillText(listening ? 'Listening for bird sounds…' : 'Start listening to see timbre trails', W/2, H/2 - 6);
+  ctx.font = '11px serif'; ctx.fillStyle = 'rgba(90,80,55,0.22)';
+  ctx.fillText('Each glowing dot = one audio frame · trail shows call trajectory', W/2, H/2 + 14);
+}
+
+/* ════════════════════════════════════════════════
    NAVIGATION
 ════════════════════════════════════════════════ */
 function show(id){
@@ -1499,6 +1941,17 @@ function show(id){
 function goTab(id){
   show(id);
   document.querySelectorAll('.tb').forEach(b=>b.classList.toggle('act',b.dataset.tab===id));
+  timbreActive = (id==='TI');
+  if(id==='TI'){
+    // Resize canvas to match actual rendered size, then start loop
+    setTimeout(()=>{
+      resizeTimbreCanvas();
+      if(listening) startTimbreLoop();
+      else drawTimbreIdle();
+    }, 60);
+  } else {
+    stopTimbreLoop();
+  }
   if(id==='ST') renderStats();
   if(id==='MA') renderMap();
   if(id==='SE'){
