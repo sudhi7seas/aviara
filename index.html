@@ -844,7 +844,10 @@ async function startListen(){
 
     scriptProc=audioCtx.createScriptProcessor(4096,1,1);
     const src=audioCtx.createMediaStreamSource(mediaStream);
-    src.connect(analyser); src.connect(scriptProc);
+    // Connect analyser into the graph so it actively processes audio on all browsers
+    // (iOS WebKit requires analyser output to be connected downstream)
+    src.connect(analyser);
+    analyser.connect(scriptProc);
     scriptProc.connect(audioCtx.destination);
 
     audioBuf=[]; bufSecs=0;
@@ -1605,8 +1608,9 @@ function clearAllData(){
 ════════════════════════════════════════════════ */
 
 /* ── Constants ── */
-const SILENCE_FLOOR = 0.008;  // RMS below this = silence
-const FLUX_THRESH   = 0.012;  // spectral flux onset threshold
+const SILENCE_FLOOR = 0.001;  // RMS below this = true silence (mic normalised 0–1)
+const FLUX_THRESH   = 0.0008; // spectral flux onset threshold (linear mag scale, bird band)
+const CHIRP_COOLDOWN= 180;    // ms cooldown between chirp counts (prevents 60fps over-counting)
 const TRAIL_MAX     = 120;    // how many trail points to keep
 
 /* ── State ── */
@@ -1619,6 +1623,7 @@ let autoMin       = {cx:99999,sp:99999};
 let autoMax       = {cx:0,sp:0};
 let chirpCount    = 0;
 let chirpFlashTmr = null;
+let lastChirpTime = 0;        // timestamp of last counted chirp (cooldown gate)
 let timbreActive  = false;    // true while TI tab is visible
 
 /* ── Setup timbre canvas (called after boot) ── */
@@ -1644,6 +1649,7 @@ function clearTimbreTrail(){
   autoMin     = {cx:99999,sp:99999};
   autoMax     = {cx:0,sp:0};
   chirpCount  = 0;
+  lastChirpTime = 0;
   document.getElementById('chirpCount').textContent = '0';
   drawTimbreIdle();
   updateTimbreUI(null);
@@ -1652,20 +1658,26 @@ function clearTimbreTrail(){
 /* ── Compute acoustic descriptors from frequency data ── */
 function computeDescriptors(freqData, timeData, sampleRate){
   const binHz = sampleRate / 2048;
-  // Focus on bird frequency range: ~500 Hz – 10000 Hz
+  // Bird frequency range: ~500 Hz – 10000 Hz
   const lo = Math.floor(500  / binHz);
   const hi = Math.min(Math.floor(10000 / binHz), freqData.length - 1);
 
-  // Convert dB → linear magnitude
+  // Quick silence check in dB domain — if peak < -70 dBFS, no useful signal
+  let peakDb = -Infinity;
+  for(let i = lo; i <= hi; i++) if(freqData[i] > peakDb) peakDb = freqData[i];
+  if(peakDb < -70) return null;
+
+  // Convert dB → linear magnitude (floor at -80 dB to avoid -Infinity artifacts)
   const mags = new Float32Array(hi - lo + 1);
   let magSum = 0, logMagSum = 0;
   for(let i = lo; i <= hi; i++){
-    const m = Math.pow(10, freqData[i] / 20);
+    const db = Math.max(freqData[i], -80);
+    const m  = Math.pow(10, db / 20);
     mags[i - lo] = m;
     magSum    += m;
     logMagSum += Math.log(m + 1e-10);
   }
-  if(magSum < 1e-10) return null; // silence
+  if(magSum < 1e-8) return null;
 
   // Spectral Centroid (Hz)
   let centroid = 0;
@@ -1682,26 +1694,28 @@ function computeDescriptors(freqData, timeData, sampleRate){
   }
   spread = Math.sqrt(spread / magSum);
 
-  // Spectral Flux (onset detector, positive only)
+  // Spectral Flux (onset detector, positive only, normalised by mean mag)
   let flux = 0;
   if(prevMags && prevMags.length === mags.length){
+    const norm = magSum / mags.length; // normalise so flux is scale-independent
     for(let i = 0; i < mags.length; i++){
       const d = mags[i] - prevMags[i];
       if(d > 0) flux += d;
     }
-    flux /= mags.length;
+    flux = (flux / mags.length) / (norm + 1e-10);
   }
   prevMags = mags.slice();
 
   // Spectral Flatness (0=tonal, 1=noise)
-  const geoMean = Math.exp(logMagSum / mags.length);
+  const geoMean   = Math.exp(logMagSum / mags.length);
   const arithMean = magSum / mags.length;
-  const flatness = Math.min(1, geoMean / (arithMean + 1e-10));
+  const flatness  = Math.min(1, geoMean / (arithMean + 1e-10));
 
-  // Tonality (1=musical, 0=noise)
-  const tonality = Math.max(0, Math.min(1, 1 - flatness * 4));
+  // Tonality (1=musical, 0=noise) — scale flatness non-linearly so typical bird
+  // calls (partial tonality) still register meaningfully
+  const tonality = Math.max(0, Math.min(1, 1 - Math.pow(flatness, 0.5) * 2));
 
-  // RMS Energy from time-domain data
+  // RMS from time-domain (Uint8, centre=128)
   let rmsSum = 0;
   for(let i = 0; i < timeData.length; i++){
     const v = (timeData[i] / 128) - 1;
@@ -1709,20 +1723,24 @@ function computeDescriptors(freqData, timeData, sampleRate){
   }
   const rms = Math.sqrt(rmsSum / timeData.length);
 
-  return {centroid, spread, flux, flatness, tonality, rms};
+  return {centroid, spread, flux, flatness, tonality, rms, peakDb};
 }
 
 /* ── Heuristic call-type classifier ── */
 function classifyCall(f){
-  if(f.rms < SILENCE_FLOOR)      return 'SILENCE';
-  const hi     = f.centroid > 5000;
-  const sharp  = f.flux > FLUX_THRESH * 1.5;
-  const broad  = f.flatness > 0.15;
-  const tonal  = f.tonality > 0.60;
-  if(sharp && hi && !broad)      return 'ALARM CALL';
-  if(sharp && broad)             return 'DISTRESS';
-  if(tonal && hi)                return 'MATING SONG';
-  if(tonal && !hi)               return 'CONTACT';
+  // Use dB-domain silence check (more reliable than RMS from mic-normalised data)
+  if(f.peakDb < -65 || f.rms < SILENCE_FLOOR) return 'SILENCE';
+
+  // flux is now normalised (relative to mean magnitude), typical range 0–2
+  const sharp  = f.flux     > 0.08;   // fast attack = onset
+  const hi     = f.centroid > 4500;   // high-pitched (most small bird song is 3–8 kHz)
+  const broad  = f.flatness > 0.12;   // noisy spectrum
+  const tonal  = f.tonality > 0.35;   // musical / harmonic
+
+  if(sharp && hi && !broad)            return 'ALARM CALL';
+  if(sharp && broad)                   return 'DISTRESS';
+  if(tonal && hi)                      return 'MATING SONG';
+  if(tonal && !hi)                     return 'CONTACT';
   return 'AMBIENT';
 }
 
@@ -1787,10 +1805,13 @@ function startTimbreLoop(){
 
     const f = computeDescriptors(freqData, timeData, nativeSR || 48000);
     updateTimbreUI(f || null);
-    if(!f || f.rms < SILENCE_FLOOR){ renderTimbreCanvas(); return; }
+    // Use dB silence check: peakDb < -65 means truly no signal
+    if(!f || f.peakDb < -65){ renderTimbreCanvas(); return; }
 
-    // Detect chirp onset
-    if(f.flux > FLUX_THRESH && f.rms > SILENCE_FLOOR * 2){
+    // Detect chirp onset with cooldown gate (prevents 60fps over-counting)
+    const now = performance.now();
+    if(f.flux > FLUX_THRESH && f.rms > SILENCE_FLOOR && (now - lastChirpTime) > CHIRP_COOLDOWN){
+      lastChirpTime = now;
       chirpCount++;
       document.getElementById('chirpCount').textContent = chirpCount;
       const flash = document.getElementById('chirpFlash');
