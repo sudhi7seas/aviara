@@ -181,7 +181,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .ti-panel{flex:1;background:var(--srf);padding:8px 10px;
   border-top:1px solid var(--bdr);display:flex;flex-direction:column;gap:5px}
 .ti-panel+.ti-panel{border-left:1px solid var(--bdr)}
-.ti-panel-ttl{font-size:8px;color:var(--t3);text-transform:uppercase;letter-spacing:1.6px;margin-bottom:3px}
+.ti-panel-ttl{font-size:8px;color:var(--t2);text-transform:uppercase;letter-spacing:1.6px;margin-bottom:3px;font-weight:700}
 .ti-row{display:flex;justify-content:space-between;align-items:center;gap:6px}
 .ti-lbl{font-size:10px;color:var(--t2);flex-shrink:0;min-width:52px}
 .ti-bar-wrap{flex:1;height:5px;background:var(--elev);border-radius:99px;overflow:hidden}
@@ -197,7 +197,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .call-badge.mating{background:rgba(200,151,42,.18);color:var(--gold2);border-color:rgba(200,151,42,.4)}
 .call-badge.contact{background:rgba(87,150,106,.18);color:var(--sage2);border-color:rgba(87,150,106,.4)}
 .call-badge.ambient{background:var(--elev);color:var(--t3);border-color:var(--bdr)}
-.call-badge.silence{background:transparent;color:var(--t3);border-color:transparent}
+.call-badge.silence{background:var(--elev);color:var(--t2);border-color:var(--bdr)}
 .ti-chirps{font-size:10px;color:var(--t2);text-align:center;margin-top:2px}
 .ti-chirps span{font-family:'Playfair Display',serif;color:var(--gold2);font-size:13px}
 
@@ -1608,10 +1608,14 @@ function clearAllData(){
 ════════════════════════════════════════════════ */
 
 /* ── Constants ── */
-const SILENCE_FLOOR = 0.001;  // RMS below this = true silence (mic normalised 0–1)
+const SILENCE_FLOOR = 0.0006; // RMS below this = true silence (mic normalised 0–1)
 const FLUX_THRESH   = 0.0008; // spectral flux onset threshold (linear mag scale, bird band)
 const CHIRP_COOLDOWN= 180;    // ms cooldown between chirp counts (prevents 60fps over-counting)
 const TRAIL_MAX     = 120;    // how many trail points to keep
+const NOISE_GATE_DB  = -88;   // peak below this = essentially no signal at all (was -78,
+                               // too strict — discarded quiet/distant calls that BirdNET's
+                               // buffered neural-net analysis can still identify)
+const NOISE_FLOOR_ADAPT = 0.06; // how fast the rolling noise floor adapts (0-1, lower=slower)
 
 /* ── State ── */
 let timbreTrail   = [];       // [{x,y,rms,tonality,flux,centroid}]
@@ -1624,6 +1628,7 @@ let autoMax       = {cx:0,sp:0};
 let chirpCount    = 0;
 let chirpFlashTmr = null;
 let lastChirpTime = 0;        // timestamp of last counted chirp (cooldown gate)
+let rollingNoiseFloor = -75;  // adaptive dB noise floor, tracks quiet ambient level
 let timbreActive  = false;    // true while TI tab is visible
 
 /* ── Setup timbre canvas (called after boot) ── */
@@ -1662,22 +1667,31 @@ function computeDescriptors(freqData, timeData, sampleRate){
   const lo = Math.floor(500  / binHz);
   const hi = Math.min(Math.floor(10000 / binHz), freqData.length - 1);
 
-  // Quick silence check in dB domain — if peak < -70 dBFS, no useful signal
+  // Peak level in this frame (for noise floor tracking + hard silence gate)
   let peakDb = -Infinity;
   for(let i = lo; i <= hi; i++) if(freqData[i] > peakDb) peakDb = freqData[i];
-  if(peakDb < -70) return null;
+  if(peakDb < NOISE_GATE_DB) return {silent:true, peakDb};
 
-  // Convert dB → linear magnitude (floor at -80 dB to avoid -Infinity artifacts)
+  // Adaptive noise floor: slowly tracks the quiet ambient level so we can
+  // subtract it out. Only adapts DOWN on quiet frames (rises fast if loud,
+  // falls slowly) so it settles just above the room's actual noise level.
+  if(peakDb < rollingNoiseFloor + 6){
+    rollingNoiseFloor += (peakDb - rollingNoiseFloor) * NOISE_FLOOR_ADAPT;
+  }
+  const floorDb = rollingNoiseFloor;
+
+  // Convert dB → linear magnitude, subtracting the noise floor so a quiet
+  // bird call several metres away still stands out above mic hiss.
   const mags = new Float32Array(hi - lo + 1);
   let magSum = 0, logMagSum = 0;
   for(let i = lo; i <= hi; i++){
-    const db = Math.max(freqData[i], -80);
-    const m  = Math.pow(10, db / 20);
+    const dbAbove = Math.max(freqData[i] - floorDb, 0); // dB above noise floor
+    const m  = Math.pow(10, dbAbove / 20);
     mags[i - lo] = m;
     magSum    += m;
     logMagSum += Math.log(m + 1e-10);
   }
-  if(magSum < 1e-8) return null;
+  if(magSum < 1e-6) return {silent:true, peakDb};
 
   // Spectral Centroid (Hz)
   let centroid = 0;
@@ -1697,7 +1711,7 @@ function computeDescriptors(freqData, timeData, sampleRate){
   // Spectral Flux (onset detector, positive only, normalised by mean mag)
   let flux = 0;
   if(prevMags && prevMags.length === mags.length){
-    const norm = magSum / mags.length; // normalise so flux is scale-independent
+    const norm = magSum / mags.length;
     for(let i = 0; i < mags.length; i++){
       const d = mags[i] - prevMags[i];
       if(d > 0) flux += d;
@@ -1711,11 +1725,10 @@ function computeDescriptors(freqData, timeData, sampleRate){
   const arithMean = magSum / mags.length;
   const flatness  = Math.min(1, geoMean / (arithMean + 1e-10));
 
-  // Tonality (1=musical, 0=noise) — scale flatness non-linearly so typical bird
-  // calls (partial tonality) still register meaningfully
+  // Tonality (1=musical, 0=noise)
   const tonality = Math.max(0, Math.min(1, 1 - Math.pow(flatness, 0.5) * 2));
 
-  // RMS from time-domain (Uint8, centre=128)
+  // RMS from time-domain (Uint8, centre=128) — used only as a secondary signal
   let rmsSum = 0;
   for(let i = 0; i < timeData.length; i++){
     const v = (timeData[i] / 128) - 1;
@@ -1723,15 +1736,19 @@ function computeDescriptors(freqData, timeData, sampleRate){
   }
   const rms = Math.sqrt(rmsSum / timeData.length);
 
-  return {centroid, spread, flux, flatness, tonality, rms, peakDb};
+  // Signal strength above noise floor, 0–1, used to scale dot size / fade.
+  // Divided by 22 dB instead of 30 so quieter/distant calls still register
+  // a meaningfully visible strength value rather than rounding toward 0.
+  const strength = Math.max(0, Math.min(1, (peakDb - floorDb) / 22));
+
+  return {centroid, spread, flux, flatness, tonality, rms, peakDb, strength, silent:false};
 }
 
 /* ── Heuristic call-type classifier ── */
 function classifyCall(f){
-  // Use dB-domain silence check (more reliable than RMS from mic-normalised data)
-  if(f.peakDb < -65 || f.rms < SILENCE_FLOOR) return 'SILENCE';
+  if(!f || f.silent || f.rms < SILENCE_FLOOR) return 'SILENCE';
 
-  // flux is now normalised (relative to mean magnitude), typical range 0–2
+  // flux is normalised (relative to mean magnitude), typical range 0–2
   const sharp  = f.flux     > 0.08;   // fast attack = onset
   const hi     = f.centroid > 4500;   // high-pitched (most small bird song is 3–8 kHz)
   const broad  = f.flatness > 0.12;   // noisy spectrum
@@ -1804,13 +1821,12 @@ function startTimbreLoop(){
     analyser.getByteTimeDomainData(timeData);
 
     const f = computeDescriptors(freqData, timeData, nativeSR || 48000);
-    updateTimbreUI(f || null);
-    // Use dB silence check: peakDb < -65 means truly no signal
-    if(!f || f.peakDb < -65){ renderTimbreCanvas(); return; }
+    updateTimbreUI(f && !f.silent ? f : null);
+    if(!f || f.silent){ renderTimbreCanvas(); return; }
 
     // Detect chirp onset with cooldown gate (prevents 60fps over-counting)
     const now = performance.now();
-    if(f.flux > FLUX_THRESH && f.rms > SILENCE_FLOOR && (now - lastChirpTime) > CHIRP_COOLDOWN){
+    if(f.flux > FLUX_THRESH && f.strength > 0.025 && (now - lastChirpTime) > CHIRP_COOLDOWN){
       lastChirpTime = now;
       chirpCount++;
       document.getElementById('chirpCount').textContent = chirpCount;
@@ -1818,6 +1834,11 @@ function startTimbreLoop(){
       if(flash){ flash.classList.add('on'); clearTimeout(chirpFlashTmr);
         chirpFlashTmr = setTimeout(()=>flash.classList.remove('on'), 600); }
     }
+
+    // Only plot a trail point if there's at least a faint signal above the
+    // noise floor (strength > 0) — this lets quiet/distant calls still show,
+    // just as smaller, dimmer dots, rather than being skipped entirely.
+    if(f.strength < 0.008){ renderTimbreCanvas(); return; }
 
     // Auto-range: update seen min/max for centroid & spread
     if(f.centroid < autoMin.cx) autoMin.cx = f.centroid;
@@ -1848,32 +1869,32 @@ function renderTimbreCanvas(){
   const W = timbreCanvas.width, H = timbreCanvas.height;
   const ctx = timbreCtx;
 
-  // Dark background with subtle grid
-  ctx.fillStyle = '#020a02';
+  // Lighter background than before (#0A150A vs #020a02) for outdoor/sunlight visibility
+  ctx.fillStyle = '#0A150A';
   ctx.fillRect(0, 0, W, H);
 
-  // Grid lines
-  ctx.strokeStyle = 'rgba(200,151,42,0.06)';
+  // Grid lines — raised opacity for daylight contrast
+  ctx.strokeStyle = 'rgba(232,184,75,0.16)';
   ctx.lineWidth = 1;
   for(let i=1;i<5;i++){
     ctx.beginPath(); ctx.moveTo(W*i/5, 0); ctx.lineTo(W*i/5, H); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0, H*i/5); ctx.lineTo(W, H*i/5); ctx.stroke();
   }
 
-  // Axis labels
-  ctx.font = '8px monospace'; ctx.fillStyle = 'rgba(200,151,42,0.22)';
+  // Axis labels — much higher opacity + bolder weight
+  ctx.font = 'bold 9px monospace'; ctx.fillStyle = 'rgba(239,229,197,0.55)';
   ctx.textAlign = 'center'; ctx.fillText('← Low Centroid · High Centroid →', W/2, H-4);
-  ctx.save(); ctx.translate(8, H/2); ctx.rotate(-Math.PI/2);
+  ctx.save(); ctx.translate(10, H/2); ctx.rotate(-Math.PI/2);
   ctx.fillText('← Narrow · Spread Wide →', 0, 0); ctx.restore();
 
   if(timbreTrail.length < 2){ drawTimbreIdle(); return; }
 
   const n = timbreTrail.length;
 
-  // Long-range connector lines (global structure of call)
+  // Long-range connector lines (global structure of call) — raised opacity
   const step = Math.max(1, Math.floor(n / 5));
-  ctx.strokeStyle = 'rgba(100,180,120,0.10)';
-  ctx.lineWidth = 0.8;
+  ctx.strokeStyle = 'rgba(120,210,140,0.22)';
+  ctx.lineWidth = 1;
   ctx.beginPath();
   for(let i = 0; i + step < n; i += step){
     ctx.moveTo(timbreTrail[i].x, timbreTrail[i].y);
@@ -1881,18 +1902,21 @@ function renderTimbreCanvas(){
   }
   ctx.stroke();
 
-  // Trail connector line (recent path)
+  // Trail connector line (recent path) — minimum opacity raised so old
+  // segments of the trail don't fade into invisibility in bright light
   for(let i = 1; i < n; i++){
     const age    = i / n;               // 0=oldest, 1=newest
     const pt     = timbreTrail[i];
     const prev   = timbreTrail[i-1];
     const tone   = pt.tonality || 0;
-    // colour: warm (alarm/noise) → cool (tonal/mating)
-    const r = Math.round(220 - tone * 160);
-    const g = Math.round(120 + tone * 100);
-    const b = Math.round(40  + tone * 200);
-    ctx.strokeStyle = `rgba(${r},${g},${b},${age * 0.6})`;
-    ctx.lineWidth = 1 + age * 1.5;
+    // colour: warm gold (alarm/noise) → cool cyan (tonal/mating) — both ends
+    // chosen to stay bright/saturated rather than muddy, for sunlight legibility
+    const r = Math.round(255 - tone * 175);
+    const g = Math.round(150 + tone * 70);
+    const b = Math.round(50  + tone * 205);
+    const op = 0.35 + age * 0.5; // floor raised from ~0 to 0.35
+    ctx.strokeStyle = `rgba(${r},${g},${b},${op})`;
+    ctx.lineWidth = 1.4 + age * 1.6;
     ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.lineTo(pt.x, pt.y); ctx.stroke();
   }
 
@@ -1901,28 +1925,31 @@ function renderTimbreCanvas(){
   visible.forEach((pt, i)=>{
     const age    = (i+1) / visible.length;
     const tone   = pt.tonality || 0;
-    const r = Math.round(220 - tone * 160);
-    const g = Math.round(120 + tone * 100);
-    const b = Math.round(40  + tone * 200);
-    const radius = Math.max(2.5, Math.min(10, pt.rms * 80 + 2));
+    const r = Math.round(255 - tone * 175);
+    const g = Math.round(150 + tone * 70);
+    const b = Math.round(50  + tone * 205);
+    const radius = Math.max(3.5, Math.min(11, pt.rms * 90 + 3));
 
     // Outer glow
-    if(age > 0.6){
+    if(age > 0.4){
       const grd = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, radius * 3.5);
-      grd.addColorStop(0, `rgba(${r},${g},${b},${age*0.25})`);
+      grd.addColorStop(0, `rgba(${r},${g},${b},${age*0.4})`);
       grd.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = grd;
       ctx.beginPath(); ctx.arc(pt.x, pt.y, radius * 3.5, 0, Math.PI*2); ctx.fill();
     }
 
-    // Core dot
-    ctx.fillStyle = `rgba(${r},${g},${b},${0.3 + age * 0.7})`;
+    // Core dot — opacity floor raised from 0.3 to 0.55
+    ctx.fillStyle = `rgba(${r},${g},${b},${0.55 + age * 0.45})`;
     ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, Math.PI*2); ctx.fill();
+    // Thin dark outline so bright dots stay defined against light backgrounds too
+    ctx.strokeStyle = 'rgba(5,12,5,0.5)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(pt.x, pt.y, radius, 0, Math.PI*2); ctx.stroke();
 
     // White hot centre on newest node
     if(i === visible.length - 1){
-      ctx.fillStyle = `rgba(255,255,255,0.85)`;
-      ctx.beginPath(); ctx.arc(pt.x, pt.y, Math.max(1.5, radius*0.4), 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = `rgba(255,255,255,0.95)`;
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, Math.max(1.8, radius*0.4), 0, Math.PI*2); ctx.fill();
     }
   });
 }
@@ -1932,23 +1959,23 @@ function drawTimbreIdle(){
   if(!timbreCtx || !timbreCanvas) return;
   const W = timbreCanvas.width, H = timbreCanvas.height;
   const ctx = timbreCtx;
-  ctx.fillStyle = '#020a02';
+  ctx.fillStyle = '#0A150A';
   ctx.fillRect(0, 0, W, H);
   // Grid
-  ctx.strokeStyle = 'rgba(200,151,42,0.06)'; ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(232,184,75,0.16)'; ctx.lineWidth = 1;
   for(let i=1;i<5;i++){
     ctx.beginPath(); ctx.moveTo(W*i/5,0); ctx.lineTo(W*i/5,H); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0,H*i/5); ctx.lineTo(W,H*i/5); ctx.stroke();
   }
-  ctx.font = '8px monospace'; ctx.fillStyle = 'rgba(200,151,42,0.22)';
+  ctx.font = 'bold 9px monospace'; ctx.fillStyle = 'rgba(239,229,197,0.55)';
   ctx.textAlign = 'center'; ctx.fillText('← Low Centroid · High Centroid →', W/2, H-4);
-  ctx.save(); ctx.translate(8, H/2); ctx.rotate(-Math.PI/2);
+  ctx.save(); ctx.translate(10, H/2); ctx.rotate(-Math.PI/2);
   ctx.fillText('← Narrow · Spread Wide →', 0, 0); ctx.restore();
-  // Placeholder text
-  ctx.font = '13px serif'; ctx.fillStyle = 'rgba(165,151,120,0.28)';
+  // Placeholder text — opacity raised substantially for outdoor/sunlight legibility
+  ctx.font = 'bold 14px serif'; ctx.fillStyle = 'rgba(239,229,197,0.65)';
   ctx.textAlign = 'center';
   ctx.fillText(listening ? 'Listening for bird sounds…' : 'Start listening to see timbre trails', W/2, H/2 - 6);
-  ctx.font = '11px serif'; ctx.fillStyle = 'rgba(90,80,55,0.22)';
+  ctx.font = '11px serif'; ctx.fillStyle = 'rgba(232,184,75,0.5)';
   ctx.fillText('Each glowing dot = one audio frame · trail shows call trajectory', W/2, H/2 + 14);
 }
 
