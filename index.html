@@ -77,7 +77,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .ld-note{font-size:11px;color:var(--t3);font-style:italic;line-height:1.6}
 
 /* ══ LISTEN ════════════════════════════════════ */
-#LI{padding:0;justify-content:flex-start;
+#LI{padding:0;justify-content:flex-start;overflow:hidden;
   padding-bottom:calc(var(--tab) + env(safe-area-inset-bottom))}
 .spec-wrap{width:100%;position:relative;flex-shrink:0;
   background:var(--srf);border-bottom:1px solid var(--bdr)}
@@ -128,7 +128,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
   width:100%;padding:5px 16px 4px;flex-shrink:0}
 .feed-ttl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1.6px}
 .feed-clr{font-size:11px;color:var(--t3);cursor:pointer;touch-action:manipulation;padding:4px}
-#feed{flex:1;overflow-y:auto;width:100%;padding:0 12px;-webkit-overflow-scrolling:touch}
+#feed{flex:1;min-height:0;overflow-y:auto;width:100%;padding:0 12px 8px;-webkit-overflow-scrolling:touch}
 .empty{text-align:center;padding:32px 20px;color:var(--t3);font-style:italic;
   font-size:15px;line-height:1.75}
 
@@ -835,11 +835,16 @@ window.addEventListener('load', async () => {
     setupCanvases();
     setupTimbreCanvas();
     applySett();
+
+    // Start location now (persistent — only asked once ever)
+    startLocation();
+
     show('LI');
     document.addEventListener('visibilitychange',async()=>{
-      if(document.visibilityState==='visible'&&listening){
+      if(document.visibilityState==='visible'){
+        // Resume audio context whenever app comes back to foreground
         try{ if(audioCtx?.state==='suspended') await audioCtx.resume(); }catch(e){}
-        if(S.useWakeLock) requestWakeLock();
+        if(listening && S.useWakeLock) requestWakeLock();
       }
     });
     if('serviceWorker' in navigator)
@@ -934,17 +939,26 @@ function stopSilentNode(){
 }
 
 /* ════════════════════════════════════════════════
-   LOCATION
+   LOCATION — persistent, started once at app boot
+   NOT tied to listen start/stop so:
+   - permission is only asked once ever
+   - switching tabs never re-triggers permission
+   - weather can always find currentLoc
 ════════════════════════════════════════════════ */
 function startLocation(){
   if(!S.useLocation||!navigator.geolocation) return;
-  fetchLoc(); locInterval=setInterval(fetchLoc,90000);
+  if(locInterval) return; // already running — never start twice
+  fetchLoc();
+  locInterval=setInterval(fetchLoc, 90000);
 }
-function stopLocation(){ try{clearInterval(locInterval);locInterval=null;}catch(e){} }
+function stopLocation(){
+  try{clearInterval(locInterval);locInterval=null;}catch(e){}
+}
 
 function fetchLoc(){
   navigator.geolocation.getCurrentPosition(async pos=>{
     const lat=pos.coords.latitude, lon=pos.coords.longitude;
+    const hadLoc=!!currentLoc;
     currentLoc={lat,lon,place:''};
     try{
       const r=await fetch(
@@ -959,7 +973,11 @@ function fetchLoc(){
     if(pill&&txt){pill.style.display='block';txt.textContent=currentLoc.place||`${lat.toFixed(3)},${lon.toFixed(3)}`;}
     const st=document.getElementById('locStatusTxt');
     if(st) st.textContent='📍 '+(currentLoc.place||'Location active');
-  },()=>{},{timeout:10000,enableHighAccuracy:false});
+    // Now that we have location, fetch weather if not already fetched
+    if(!hadLoc || !currentWeather){
+      fetchWeather().catch(()=>{});
+    }
+  },()=>{},{timeout:12000,enableHighAccuracy:false});
 }
 
 /* ════════════════════════════════════════════════
@@ -999,15 +1017,17 @@ async function startListen(){
     scriptProc.onaudioprocess=onAudio;
 
     startSilentNode();
-    startLocation();
+    // Location is persistent (started at boot) — do NOT call startLocation() here
+    // so we never re-request permission on every Start press
     if(S.useWakeLock) requestWakeLock();
 
     listening=true; hasStopped=false;
     setListenUI('recording');
     clearSpec(); startSpecLoop();
     if(timbreActive) startTimbreLoop();
-    // Fetch weather in background (won't block listening startup)
-    fetchWeather().catch(()=>{});
+    // Fetch weather — if location is already available this works immediately.
+    // If not, fetchLoc() will trigger it once location resolves.
+    if(currentLoc) fetchWeather().catch(()=>{});
 
   }catch(e){
     // Cleanup on failure
@@ -1032,17 +1052,13 @@ function stopListen(){
   try{if(scriptProc){scriptProc.disconnect();scriptProc=null;}}catch(e){}
   try{if(mediaStream){mediaStream.getTracks().forEach(t=>t.stop());mediaStream=null;}}catch(e){}
   try{stopSilentNode();}catch(e){}
-  try{stopLocation();}catch(e){}
+  // Do NOT stop location — it's persistent and must stay running between sessions
   try{releaseWakeLock();}catch(e){}
   try{stopSpecLoop();idleWave();}catch(e){}
   try{stopTimbreLoop();drawTimbreIdle();}catch(e){}
   hasStopped=true;
-  // This always runs regardless of errors above
   setListenUI('stopped');
-  try{
-    const pill=document.getElementById('locPill');
-    if(pill) pill.style.display='none';
-  }catch(e){}
+  // Note: loc pill stays visible — location continues running between sessions
 }
 
 function onAudio(e){
@@ -1233,8 +1249,52 @@ function applyCSBadge(sci,code){
 }
 
 /* ════════════════════════════════════════════════
-   HISTORY
+   MIGRATION STATUS — background fetch per species
+   Works exactly like getCS(): fires once per species,
+   caches result, updates any visible cards.
+   This means migration tag shows on detection cards
+   WITHOUT requiring the user to open the info panel.
 ════════════════════════════════════════════════ */
+const migFetching={};  // sci → Promise (prevents duplicate fetches)
+
+function getMigration(sci, com){
+  if(migCache[sci]!==undefined) return Promise.resolve(migCache[sci]);
+  if(migFetching[sci]) return migFetching[sci];
+
+  migFetching[sci]=(async()=>{
+    let result=null;
+    // Try scientific name first (more reliable), then common name
+    for(const name of [sci, com]){
+      if(result) break;
+      if(!name||name===sci&&result) continue;
+      try{
+        const r=await fetch(
+          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`,
+          {signal:AbortSignal.timeout(6000)}
+        );
+        if(r.ok){
+          const d=await r.json();
+          result=parseMigration(d.extract||'');
+        }
+      }catch(e){}
+    }
+    migCache[sci]=result; // null means "checked, not found" — don't re-fetch
+    delete migFetching[sci];
+    return result;
+  })();
+  return migFetching[sci];
+}
+
+function applyMigTag(sci, migTag){
+  if(!migTag) return;
+  // Update all visible detection cards for this species
+  document.querySelectorAll('.det-mig[data-sci]').forEach(el=>{
+    if(el.dataset.sci===sci){
+      el.textContent=`${migTag.e} ${migTag.txt}`;
+      el.style.display='';
+    }
+  });
+}
 function loadHistory(){
   try{return JSON.parse(localStorage.getItem(HIST_KEY)||'[]');}catch(e){return[];}
 }
@@ -1286,7 +1346,8 @@ function addDetection(lbl,score){
     `<div class="det-l">
        <div class="det-top"><div class="det-name">${esc(lbl.com)}</div>${badgeHtml}${liferHtml}</div>
        <div class="det-sci">${esc(lbl.sci)}</div>
-       ${migHtml?`<div class="det-mig">${migHtml}</div>`:''}
+       <div class="det-mig" id="${cardId}-mig" data-sci="${esc(lbl.sci)}"
+         style="${migTag?'':'display:none'}">${migTag?`${migTag.e} ${migTag.txt}`:''}</div>
        ${entry.place?`<div class="det-loc">📍 ${esc(entry.place)}</div>`:''}
        ${wxHtml}
        <div class="det-bar"><div class="det-bar-fill" style="width:${pct}%;background:${color}"></div></div>
@@ -1306,6 +1367,21 @@ function addDetection(lbl,score){
     applyCSBadge(lbl.sci,code);
     const h=loadHistory();let changed=false;
     h.forEach(d=>{if(d.sci===lbl.sci&&!d.cs){d.cs=code;changed=true;}});
+    if(changed) saveHistory(h);
+  });
+
+  // Fetch migration status in background — updates card and history when ready
+  getMigration(lbl.sci, lbl.com).then(migTag=>{
+    if(!migTag) return;
+    // Update the migration tag on this card
+    const migEl=document.getElementById(cardId+'-mig');
+    if(migEl){
+      migEl.textContent=`${migTag.e} ${migTag.txt}`;
+      migEl.style.display='';
+    }
+    // Patch history entries for this species
+    const h=loadHistory(); let changed=false;
+    h.forEach(d=>{if(d.sci===lbl.sci&&!d.mig){d.mig=migTag;changed=true;}});
     if(changed) saveHistory(h);
   });
 
@@ -1856,8 +1932,16 @@ function updateThreshold(v){
 }
 function toggleLocation(on){
   S.useLocation=on; saveSett();
-  if(on&&listening) startLocation();
-  else if(!on){stopLocation();currentLoc=null;}
+  if(on){
+    // Start or restart the persistent location watcher
+    stopLocation(); // clear any existing interval first
+    startLocation();
+  } else {
+    stopLocation();
+    currentLoc=null;
+    const pill=document.getElementById('locPill');
+    if(pill) pill.style.display='none';
+  }
   const st=document.getElementById('locStatus');
   if(st) st.style.display=on&&currentLoc?'flex':'none';
 }
@@ -2271,8 +2355,13 @@ function goTab(id){
   show(id);
   document.querySelectorAll('.tb').forEach(b=>b.classList.toggle('act',b.dataset.tab===id));
   timbreActive = (id==='TI');
+
+  // iOS suspends AudioContext when UI changes — always resume it on any tab switch
+  if(audioCtx?.state==='suspended'){
+    audioCtx.resume().catch(()=>{});
+  }
+
   if(id==='TI'){
-    // Resize canvas to match actual rendered size, then start loop
     setTimeout(()=>{
       resizeTimbreCanvas();
       if(listening) startTimbreLoop();
