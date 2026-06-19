@@ -164,6 +164,52 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .cr{background:rgba(155,35,24,.95);color:#fff}
 .dd{background:rgba(90,90,90,.88);color:#fff}
 
+/* ── Lifer flash (detection card) ── */
+.lifer-flash{font-size:9px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;
+  color:var(--sage2);background:rgba(87,150,106,.18);border:1px solid rgba(87,150,106,.4);
+  border-radius:5px;padding:2px 6px;white-space:nowrap;flex-shrink:0;
+  animation:liferPop .6s ease}
+@keyframes liferPop{0%{transform:scale(.8);opacity:0}60%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+
+/* ── Lifer banner (info panel) ── */
+.lifer-banner{margin-top:8px;padding:7px 11px;border-radius:8px;font-size:12px;
+  color:var(--sage2);background:rgba(87,150,106,.14);border:1px solid rgba(87,150,106,.3);
+  line-height:1.4}
+
+/* ── Lifer star (stats lifer list) ── */
+.lifer-star{font-size:16px;color:var(--sage2);flex-shrink:0;width:20px;text-align:center}
+
+/* ── Migration tag (detection card) ── */
+.det-mig{font-size:10px;color:var(--gold2);margin-bottom:2px;line-height:1.3}
+.mig-tag{display:inline-flex;align-items:center;gap:3px;font-size:10px;
+  color:var(--gold2);background:rgba(200,151,42,.1);border:1px solid rgba(200,151,42,.25);
+  border-radius:5px;padding:1px 6px;white-space:nowrap}
+
+/* ── Weather stamp (detection card + history) ── */
+.det-wx{font-size:10px;color:var(--t2);margin-top:1px;margin-bottom:2px;line-height:1.3}
+.hist-wx{font-size:10px;color:var(--t2);margin-top:1px}
+.t-wx{font-size:11px;color:var(--t2);margin-top:6px;padding-top:6px;
+  border-top:1px solid rgba(200,151,42,.08);line-height:1.4}
+
+/* ── Vocal fingerprint / individual recognition (info panel) ── */
+.vprint-tile{padding:14px}
+.vprint-row{display:flex;align-items:center;gap:12px;margin:8px 0 6px}
+.vprint-score{font-family:'Playfair Display',serif;font-size:32px;font-weight:700;
+  flex-shrink:0;line-height:1}
+.vprint-detail{flex:1;min-width:0}
+.vprint-match{font-size:13px;color:var(--t1);line-height:1.3}
+.vprint-sub{font-size:10px;color:var(--t3);margin-top:2px}
+.vprint-bar-wrap{height:4px;background:var(--elev);border-radius:99px;overflow:hidden;margin-bottom:8px}
+.vprint-bar{height:100%;border-radius:99px;transition:width .4s ease}
+.t-note{font-size:10px;color:var(--t3);font-style:italic;line-height:1.5}
+
+/* ── Dashboard chart card (stats) ── */
+.dash-card{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);
+  padding:12px 10px 6px;overflow:hidden}
+.hour-labels{display:flex;justify-content:space-between;padding:2px 2px 0;
+  font-size:9px;color:var(--t3)}
+.sum-row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px}
+
 /* ══ TIMBRE ═════════════════════════════════════ */
 #TI{padding:0;justify-content:flex-start;
   padding-bottom:calc(var(--tab) + env(safe-area-inset-bottom))}
@@ -215,7 +261,6 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .exp-btn:active{background:var(--card)}
 .st-body{width:100%;padding:0 14px 16px;display:flex;flex-direction:column;
   gap:14px;max-width:450px;margin:0 auto}
-.sum-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .sum-pill{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);
   padding:12px 8px;text-align:center}
 .sum-n{font-family:'Playfair Display',serif;font-size:26px;font-weight:700;color:var(--gold)}
@@ -620,9 +665,12 @@ const LABELS_URL = 'https://huggingface.co/justinchuby/BirdNET-onnx/resolve/main
 const CACHE_KEY  = 'aviara-v2';
 const HIST_KEY   = 'aviara_history';
 const SETT_KEY   = 'aviara_settings';
+const LIFER_KEY  = 'aviara_lifers';       // {sci → ISO date string of first detection}
+const VPRINT_KEY = 'aviara_vprints';      // {sci+'@'+locKey → [{cx,sp,tn,ts}]} vocal fingerprints
 const TARGET_SR  = 48000;
 const CHUNK_SEC  = 3.0;
 const MAX_HIST   = 1000;
+const DEDUP_MS   = 90000;   // 90 s cooldown — same species within this window is skipped
 
 /* ════════════════════════════════════════════════
    IUCN lookup
@@ -667,10 +715,107 @@ let infoFromTab='LI';
 let currentLoc=null, locInterval=null;
 let wakeLock=null;
 let leafletMap=null, mapLayer=null;
+let lastDetectTime={};   // sci → timestamp — deduplication tracker
+let currentWeather=null; // {temp,wind,cloud,precip,icon} — refreshed each session
+const migCache={};       // sci → parseMigration() result, populated on first info open
+
+/* ── Lifer helpers ── */
+function loadLifers(){ try{return JSON.parse(localStorage.getItem(LIFER_KEY)||'{}');}catch(e){return{};} }
+function saveLifers(l){ try{localStorage.setItem(LIFER_KEY,JSON.stringify(l));}catch(e){} }
+function checkLifer(sci){
+  const l=loadLifers();
+  if(l[sci]) return false; // already seen
+  l[sci]=new Date().toISOString();
+  saveLifers(l);
+  return true; // IS a lifer
+}
+
+/* ── Vocal fingerprint helpers (individual bird recognition) ── */
+function loadVPrints(){ try{return JSON.parse(localStorage.getItem(VPRINT_KEY)||'{}');}catch(e){return{};} }
+function saveVPrints(v){ try{localStorage.setItem(VPRINT_KEY,JSON.stringify(v));}catch(e){} }
+function vprintKey(sci,lat,lon){
+  // Grid-snap to 0.01° (~1 km) so nearby detections share the same location bucket
+  const la=lat?Math.round(lat*100)/100:0;
+  const lo=lon?Math.round(lon*100)/100:0;
+  return sci+'@'+la+','+lo;
+}
+function storeVPrint(sci,descriptors){
+  if(!descriptors) return;
+  const v=loadVPrints();
+  const lat=currentLoc?.lat||0, lon=currentLoc?.lon||0;
+  const key=vprintKey(sci,lat,lon);
+  if(!v[key]) v[key]=[];
+  // Store compact fingerprint snapshot: centroid, spread, tonality + timestamp
+  v[key].push({cx:Math.round(descriptors.centroid),sp:Math.round(descriptors.spread),
+               tn:Math.round(descriptors.tonality*100)/100, ts:Date.now()});
+  // Keep last 30 fingerprints per species+location
+  if(v[key].length>30) v[key]=v[key].slice(-30);
+  saveVPrints(v);
+}
+function getVocalSimilarity(sci){
+  const v=loadVPrints();
+  const lat=currentLoc?.lat||0, lon=currentLoc?.lon||0;
+  const key=vprintKey(sci,lat,lon);
+  const prints=v[key];
+  if(!prints||prints.length<3) return null; // not enough data
+  // Split: most recent vs historical average
+  const hist=prints.slice(0,-1);
+  const latest=prints[prints.length-1];
+  const avgCx=hist.reduce((s,p)=>s+p.cx,0)/hist.length;
+  const avgSp=hist.reduce((s,p)=>s+p.sp,0)/hist.length;
+  const avgTn=hist.reduce((s,p)=>s+p.tn,0)/hist.length;
+  // Normalised Euclidean distance (lower = more similar)
+  const dCx=(latest.cx-avgCx)/5000; // centroid range ~0-10000 Hz
+  const dSp=(latest.sp-avgSp)/3000; // spread range ~0-5000 Hz
+  const dTn=(latest.tn-avgTn);      // tonality 0-1
+  const dist=Math.sqrt(dCx*dCx+dSp*dSp+dTn*dTn);
+  const sim=Math.max(0,Math.min(100,Math.round((1-dist)*100)));
+  const sessions=prints.length;
+  const firstDate=new Date(prints[0].ts).toLocaleDateString([],{month:'short',day:'numeric'});
+  return{sim,sessions,firstDate};
+}
 
 /* ════════════════════════════════════════════════
-   BOOT
+   WEATHER — Open-Meteo (free, no API key)
+   Fetches current conditions once per session.
+   Stores in currentWeather for stamping detections.
 ════════════════════════════════════════════════ */
+const WX_ICONS={0:'☀️',1:'🌤',2:'⛅',3:'☁️',45:'🌫',48:'🌫',
+  51:'🌦',53:'🌦',55:'🌧',61:'🌧',63:'🌧',65:'🌧',
+  71:'🌨',73:'🌨',75:'❄️',80:'🌦',81:'🌧',82:'⛈',
+  95:'⛈',96:'⛈',99:'⛈'};
+let wxFetchedAt=0; // timestamp of last weather fetch
+
+async function fetchWeather(){
+  if(!currentLoc) return;
+  if(Date.now()-wxFetchedAt < 30*60*1000 && currentWeather) return; // cache 30 min
+  try{
+    const{lat,lon}=currentLoc;
+    const r=await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`+
+      `&current=temperature_2m,wind_speed_10m,cloud_cover,precipitation,weather_code`+
+      `&wind_speed_unit=kmh&forecast_days=1`,
+      {signal:AbortSignal.timeout(5000)}
+    );
+    if(!r.ok) return;
+    const d=await r.json();
+    const c=d.current;
+    currentWeather={
+      temp:Math.round(c.temperature_2m),
+      wind:Math.round(c.wind_speed_10m),
+      cloud:Math.round(c.cloud_cover),
+      precip:c.precipitation,
+      icon:WX_ICONS[c.weather_code]||'🌡',
+      code:c.weather_code
+    };
+    wxFetchedAt=Date.now();
+  }catch(e){ /* silent — weather is optional */ }
+}
+
+function wxSummary(wx){
+  if(!wx) return '';
+  return `${wx.icon} ${wx.temp}°C · 💨 ${wx.wind} km/h`;
+}
 window.addEventListener('load', async () => {
   try {
     ort.env.wasm.wasmPaths='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/';
@@ -861,6 +1006,8 @@ async function startListen(){
     setListenUI('recording');
     clearSpec(); startSpecLoop();
     if(timbreActive) startTimbreLoop();
+    // Fetch weather in background (won't block listening startup)
+    fetchWeather().catch(()=>{});
 
   }catch(e){
     // Cleanup on failure
@@ -1094,10 +1241,13 @@ function loadHistory(){
 function saveHistory(h){
   try{localStorage.setItem(HIST_KEY,JSON.stringify(h.slice(0,MAX_HIST)));}catch(e){}
 }
-function pushHistory(lbl,score,cs){
+function pushHistory(lbl,score,cs,migTag,isLifer){
   const h=loadHistory();
   const e={t:Date.now(),com:lbl.com,sci:lbl.sci,s:Math.round(score*100),cs:cs||''};
   if(currentLoc){e.lat=currentLoc.lat;e.lon=currentLoc.lon;e.place=currentLoc.place;}
+  if(migTag) e.mig=migTag;       // {e:'✈️', txt:'Migratory'}
+  if(isLifer) e.lifer=true;
+  if(currentWeather) e.wx=currentWeather;
   h.unshift(e); saveHistory(h); return e;
 }
 
@@ -1105,8 +1255,16 @@ function pushHistory(lbl,score,cs){
    DETECTION CARDS
 ════════════════════════════════════════════════ */
 function addDetection(lbl,score){
+  // ── Deduplication: skip if same species within 90 s ──
+  const now=Date.now();
+  if(lastDetectTime[lbl.sci]&&now-lastDetectTime[lbl.sci]<DEDUP_MS) return;
+  lastDetectTime[lbl.sci]=now;
+
   const existingCS=csCache[lbl.sci]||'';
-  const entry=pushHistory(lbl,score,existingCS);
+  const migTag=migCache[lbl.sci]||null;
+  const isLifer=checkLifer(lbl.sci);
+
+  const entry=pushHistory(lbl,score,existingCS,migTag,isLifer);
   const feed=document.getElementById('feed');
   document.getElementById('emptyState')?.remove();
 
@@ -1118,14 +1276,19 @@ function addDetection(lbl,score){
   const iucn=existingCS?IUCN[existingCS]:null;
   const cardId='card-'+Date.now()+'-'+Math.random().toString(36).slice(2);
   const badgeHtml=`<span class="cs-mini${iucn?' show '+iucn.cls:''}" id="${cardId}-badge" data-sci="${esc(lbl.sci)}">${existingCS}</span>`;
+  const liferHtml=isLifer?`<span class="lifer-flash">★ New species!</span>`:'';
+  const migHtml=migTag?`<span class="mig-tag">${migTag.e} ${migTag.txt}</span>`:'';
+  const wxHtml=currentWeather?`<div class="det-wx">${wxSummary(currentWeather)}</div>`:'';
 
   const card=document.createElement('div');
   card.className='det';
   card.innerHTML=
     `<div class="det-l">
-       <div class="det-top"><div class="det-name">${esc(lbl.com)}</div>${badgeHtml}</div>
+       <div class="det-top"><div class="det-name">${esc(lbl.com)}</div>${badgeHtml}${liferHtml}</div>
        <div class="det-sci">${esc(lbl.sci)}</div>
+       ${migHtml?`<div class="det-mig">${migHtml}</div>`:''}
        ${entry.place?`<div class="det-loc">📍 ${esc(entry.place)}</div>`:''}
+       ${wxHtml}
        <div class="det-bar"><div class="det-bar-fill" style="width:${pct}%;background:${color}"></div></div>
      </div>
      <div class="det-r">
@@ -1136,26 +1299,26 @@ function addDetection(lbl,score){
   feed.insertBefore(card,feed.firstChild);
   while(feed.children.length>60) feed.removeChild(feed.lastChild);
 
-  // Fetch conservation status async and update badge
   getCS(lbl.sci).then(code=>{
     if(!code) return;
-    // Update this specific card's badge
     const badge=document.getElementById(cardId+'-badge');
-    if(badge){
-      const iucn=IUCN[code];
-      if(iucn){
-        badge.className=`cs-mini show ${iucn.cls}`;
-        badge.textContent=code;
-      }
-    }
-    // Also update any other visible cards for same species
+    if(badge){const iucn=IUCN[code];if(iucn){badge.className=`cs-mini show ${iucn.cls}`;badge.textContent=code;}}
     applyCSBadge(lbl.sci,code);
-    // Patch history entries for this species
-    const h=loadHistory();
-    let changed=false;
+    const h=loadHistory();let changed=false;
     h.forEach(d=>{if(d.sci===lbl.sci&&!d.cs){d.cs=code;changed=true;}});
     if(changed) saveHistory(h);
   });
+
+  // Store Timbre vocal fingerprint for individual bird recognition
+  if(timbreTrail.length>0){
+    const recent=timbreTrail.slice(-5);
+    const avg={
+      centroid:recent.reduce((s,p)=>s+(p.cx||p.x||0),0)/recent.length,
+      spread:recent.reduce((s,p)=>s+(p.sp||p.y||0),0)/recent.length,
+      tonality:recent.reduce((s,p)=>s+(p.tonality||0),0)/recent.length
+    };
+    storeVPrint(lbl.sci,avg);
+  }
 }
 
 function clearFeed(){
@@ -1167,7 +1330,7 @@ function clearFeed(){
 }
 
 /* ════════════════════════════════════════════════
-   STATS
+   STATS + DASHBOARD
 ════════════════════════════════════════════════ */
 function renderStats(){
   const history=loadHistory();
@@ -1178,32 +1341,83 @@ function renderStats(){
   }
   const byS={};
   for(const d of history){
-    if(!byS[d.sci]) byS[d.sci]={com:d.com,sci:d.sci,count:0,last:0,best:0,cs:d.cs||''};
+    if(!byS[d.sci]) byS[d.sci]={com:d.com,sci:d.sci,count:0,last:0,best:0,cs:d.cs||'',mig:d.mig||null};
     byS[d.sci].count++;
     if(d.t>byS[d.sci].last) byS[d.sci].last=d.t;
     if(d.s>byS[d.sci].best) byS[d.sci].best=d.s;
     if(d.cs&&!byS[d.sci].cs) byS[d.sci].cs=d.cs;
+    if(d.mig&&!byS[d.sci].mig) byS[d.sci].mig=d.mig;
   }
   const ranked=Object.values(byS).sort((a,b)=>b.count-a.count);
   const topN=ranked[0].count;
   const today=history.filter(d=>new Date(d.t).toDateString()===new Date().toDateString()).length;
+  const lifers=loadLifers();
+  const liferCount=Object.keys(lifers).length;
 
+  // ── Summary pills ──
   let html=`<div class="sum-row">
-    <div class="sum-pill"><div class="sum-n">${history.length}</div><div class="sum-l">Total</div></div>
+    <div class="sum-pill"><div class="sum-n">${history.length}</div><div class="sum-l">Detections</div></div>
     <div class="sum-pill"><div class="sum-n">${ranked.length}</div><div class="sum-l">Species</div></div>
     <div class="sum-pill"><div class="sum-n">${today}</div><div class="sum-l">Today</div></div>
+    <div class="sum-pill" style="position:relative">
+      <div class="sum-n" style="color:var(--sage2)">${liferCount}</div>
+      <div class="sum-l">Lifers ★</div>
+    </div>
   </div>`;
 
-  const medals=['🥇','🥈','🥉'], rkCls=['rk1','rk2','rk3'];
+  // ── Hourly activity chart ──
+  const hourBins=new Array(24).fill(0);
+  history.forEach(d=>{ hourBins[new Date(d.t).getHours()]++; });
+  const maxH=Math.max(...hourBins,1);
+  html+=`<div class="sec-head">🕐 Activity by Hour of Day</div>
+  <div class="dash-card">
+    <canvas id="hourChart" height="80" style="width:100%;display:block"></canvas>
+    <div class="hour-labels">
+      <span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span>
+    </div>
+  </div>`;
+
+  // ── Lifer list ──
+  const liferSci=Object.keys(lifers).sort((a,b)=>new Date(lifers[b])-new Date(lifers[a]));
+  if(liferSci.length){
+    html+=`<div class="sec-head">★ Lifer List (${liferSci.length} species)</div>`;
+    html+=`<div class="hist-wrap">`;
+    liferSci.slice(0,20).forEach(sci=>{
+      const sp=byS[sci];
+      const dateStr=new Date(lifers[sci]).toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'});
+      const iucn=sp?.cs?IUCN[sp.cs]:null;
+      const badge=iucn?`<span class="cs-mini show ${iucn.cls}" style="margin-left:6px">${sp.cs}</span>`:'';
+      const migTag=sp?.mig?`<span style="font-size:10px;color:var(--gold2);margin-left:4px">${sp.mig.e}</span>`:'';
+      html+=`<div class="hist-item" onclick='openInfoByName(${JSON.stringify({com:sp?.com||sci,sci})})'>
+        <div class="hist-l">
+          <div class="lifer-star">★</div>
+          <div class="hist-info">
+            <div class="hist-name">${esc(sp?.com||sci)}${badge}${migTag}</div>
+            <div class="hist-sci">${esc(sci)}</div>
+          </div>
+        </div>
+        <div class="hist-r">
+          <div class="hist-time" style="text-align:right">${dateStr}</div>
+          ${sp?.count?`<div style="font-size:10px;color:var(--t3);margin-top:2px">${sp.count}× total</div>`:''}
+        </div>
+      </div>`;
+    });
+    html+=`</div>`;
+  }
+
+  // ── Frequent visitors leaderboard ──
+  const medals=['🥇','🥈','🥉'],rkCls=['rk1','rk2','rk3'];
   html+=`<div class="sec-head">🏆 Frequent Visitors</div>`;
   ranked.slice(0,10).forEach((v,i)=>{
     const pct=Math.round((v.count/topN)*100);
     const iucn=v.cs?IUCN[v.cs]:null;
     const badge=iucn?`<span class="cs-mini show ${iucn.cls}" style="margin-left:6px">${v.cs}</span>`:'';
+    const migTag=v.mig?`<span style="font-size:10px;color:var(--gold2);margin-left:4px">${v.mig.e}</span>`:'';
+    const isL=!!lifers[v.sci];
     html+=`<div class="vis-card" onclick='openInfoByName(${JSON.stringify({com:v.com,sci:v.sci})})'>
       <div class="vis-rank ${i<3?rkCls[i]:'rk_'}">${i<3?medals[i]:i+1}</div>
       <div class="vis-info">
-        <div style="display:flex;align-items:center">${esc(v.com)}${badge}</div>
+        <div style="display:flex;align-items:center">${esc(v.com)}${badge}${migTag}${isL?' <span style="color:var(--sage2);font-size:10px;margin-left:4px">★</span>':''}</div>
         <div class="vis-sci">${esc(v.sci)}</div>
         <div class="vis-bw"><div class="vis-bf" style="width:${pct}%"></div></div>
       </div>
@@ -1211,7 +1425,8 @@ function renderStats(){
     </div>`;
   });
 
-  html+=`<div class="sec-head">🕐 Detection History</div><div class="hist-wrap">`;
+  // ── Detection History ──
+  html+=`<div class="sec-head">📋 Detection History</div><div class="hist-wrap">`;
   history.slice(0,80).forEach(d=>{
     const dt=new Date(d.t);
     const ds=dt.toLocaleDateString([],{month:'short',day:'numeric'});
@@ -1219,12 +1434,16 @@ function renderStats(){
     const cls=d.s>=70?'hi':d.s>=35?'md':'lo';
     const iucn=d.cs?IUCN[d.cs]:null;
     const badge=iucn?`<span class="cs-mini show ${iucn.cls}">${d.cs}</span>`:'';
+    const migTag=d.mig?`<span style="font-size:10px;color:var(--gold2);margin-left:4px">${d.mig.e}</span>`:'';
+    const liferMark=d.lifer?`<span style="color:var(--sage2);font-size:11px;margin-left:4px">★</span>`:'';
+    const wxStr=d.wx?`<div class="hist-wx">${wxSummary(d.wx)}</div>`:'';
     html+=`<div class="hist-item" onclick='openInfoByName(${JSON.stringify({com:d.com,sci:d.sci})})'>
       <div class="hist-l">${badge}
         <div class="hist-info">
-          <div class="hist-name">${esc(d.com)}</div>
+          <div class="hist-name">${esc(d.com)}${migTag}${liferMark}</div>
           <div class="hist-sci">${esc(d.sci)}</div>
           ${d.place?`<div class="hist-loc">📍 ${esc(d.place)}</div>`:''}
+          ${wxStr}
         </div>
       </div>
       <div class="hist-r">
@@ -1235,6 +1454,33 @@ function renderStats(){
   });
   html+=`</div>`;
   body.innerHTML=html;
+
+  // ── Draw hourly chart on canvas ──
+  requestAnimationFrame(()=>{
+    const canvas=document.getElementById('hourChart');
+    if(!canvas) return;
+    const W=canvas.offsetWidth||canvas.parentElement?.offsetWidth||320;
+    canvas.width=W; canvas.height=80;
+    const ctx=canvas.getContext('2d');
+    const bw=Math.floor(W/24)-1;
+    hourBins.forEach((val,i)=>{
+      const barH=val?Math.max(4,Math.round((val/maxH)*64)):0;
+      const x=i*(bw+1)+1;
+      const y=72-barH;
+      // Dawn/dusk coloring: 5-8am gold, rest sage
+      const isDawn=(i>=5&&i<=8)||(i>=17&&i<=19);
+      ctx.fillStyle=val?(isDawn?'rgba(232,184,75,0.85)':'rgba(87,150,106,0.75)'):'rgba(87,150,106,0.15)';
+      ctx.beginPath();
+      ctx.roundRect?ctx.roundRect(x,y,bw,barH,2):ctx.rect(x,y,bw,barH);
+      ctx.fill();
+    });
+    // Hour tick labels (0,6,12,18,23)
+    ctx.font='9px sans-serif'; ctx.fillStyle='rgba(165,151,120,0.5)'; ctx.textAlign='center';
+    [0,6,12,18,23].forEach(h=>{
+      const x=h*(bw+1)+bw/2+1;
+      ctx.fillText(h===0?'12a':h===12?'12p':h>12?h-12+'p':h+'a',x,78);
+    });
+  });
 }
 
 /* ════════════════════════════════════════════════
@@ -1245,16 +1491,23 @@ function exportCSV(){
   if(!history.length){alert('No detections to export yet.');return;}
   const rows=[['Date','Time','Common Name','Scientific Name',
     'Confidence %','Conservation Status','IUCN Code',
+    'Migration','Lifer','Weather','Temperature (°C)','Wind (km/h)',
     'Location','Latitude','Longitude']];
   for(const d of history){
     const dt=new Date(d.t);
-    // Use stored cs, or fall back to in-session cache
     const code=d.cs||(csCache[d.sci]||'');
     const iucnTxt=code&&IUCN[code]?IUCN[code].txt:'';
+    const migTxt=d.mig?d.mig.txt:'';
+    const liferTxt=d.lifer?'Yes':'';
+    const wxTxt=d.wx?`${d.wx.icon} ${d.wx.temp}°C · ${d.wx.wind} km/h`:'';
+    const wxTemp=d.wx?d.wx.temp:'';
+    const wxWind=d.wx?d.wx.wind:'';
     rows.push([
       dt.toLocaleDateString(),
       dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
-      d.com,d.sci,d.s,iucnTxt,code,d.place||'',d.lat||'',d.lon||''
+      d.com,d.sci,d.s,iucnTxt,code,
+      migTxt,liferTxt,wxTxt,wxTemp,wxWind,
+      d.place||'',d.lat||'',d.lon||''
     ]);
   }
   const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
@@ -1396,6 +1649,9 @@ function renderInfo(lbl,inat,wiki){
   const habitat=parseHabitat(extract);
   const wingspan=parseWingspan(extract);
 
+  // Cache migration tag for this species so detection cards can show it immediately
+  if(migration) migCache[lbl.sci]=migration;
+
   let tiles='';
   if(iucn) tiles+=mkTile('w','🛡️ Conservation Status',
     `<span class="cs-badge ${iucn.cls}" style="position:static">${code} — ${iucn.txt}</span>`);
@@ -1410,8 +1666,15 @@ function renderInfo(lbl,inat,wiki){
   const callHtml='';
 
   const hist=loadHistory();
-  const myCount=hist.filter(d=>d.sci===lbl.sci).length;
-  const myBest=hist.filter(d=>d.sci===lbl.sci).reduce((m,d)=>Math.max(m,d.s),0);
+  const myDets=hist.filter(d=>d.sci===lbl.sci);
+  const myCount=myDets.length;
+  const myBest=myDets.reduce((m,d)=>Math.max(m,d.s),0);
+  const lifers=loadLifers();
+  const isLifer=!!lifers[lbl.sci];
+  const liferDate=isLifer?new Date(lifers[lbl.sci]).toLocaleDateString([],{month:'long',day:'numeric',year:'numeric'}):null;
+  const vsim=getVocalSimilarity(lbl.sci);
+  // Weather from most recent detection of this species
+  const lastWx=myDets.find(d=>d.wx)?.wx||null;
 
   document.getElementById('infoBody').innerHTML=
     `<div class="photo-wrap">
@@ -1424,13 +1687,31 @@ function renderInfo(lbl,inat,wiki){
        <div class="c-name">${esc(lbl.com)}</div>
        <div class="s-name">${esc(lbl.sci)}</div>
        ${wiki?.description?`<div class="desc-row">${esc(wiki.description)}</div>`:''}
+       ${isLifer?`<div class="lifer-banner">★ Your lifer — first detected ${liferDate}</div>`:''}
      </div>
      ${callHtml}
-     ${myCount>0?`<div class="tile w" style="display:flex;justify-content:space-between;align-items:center">
-       <div><div class="t-lbl">🔭 Your Sightings</div>
-         <div class="t-val">Detected <strong>${myCount}</strong> time${myCount===1?'':'s'}</div></div>
-       <div style="text-align:right"><div class="t-lbl">Best Confidence</div>
-         <div class="t-val" style="color:var(--gold2)">${myBest}%</div></div>
+     ${myCount>0?`<div class="tile w">
+       <div style="display:flex;justify-content:space-between;align-items:flex-start">
+         <div><div class="t-lbl">🔭 Your Sightings</div>
+           <div class="t-val">Detected <strong>${myCount}</strong> time${myCount===1?'':'s'}</div>
+           ${migration?`<div style="margin-top:4px;font-size:11px;color:var(--gold2)">${migration.e} ${migration.txt}</div>`:''}
+         </div>
+         <div style="text-align:right"><div class="t-lbl">Best Confidence</div>
+           <div class="t-val" style="color:var(--gold2)">${myBest}%</div></div>
+       </div>
+       ${lastWx?`<div class="t-wx">Last seen: ${wxSummary(lastWx)}</div>`:''}
+     </div>`:''}
+     ${vsim?`<div class="tile w vprint-tile">
+       <div class="t-lbl">🧬 Individual Recognition</div>
+       <div class="vprint-row">
+         <div class="vprint-score" style="color:${vsim.sim>=75?'var(--sage2)':vsim.sim>=50?'var(--gold2)':'var(--t2)'}">${vsim.sim}%</div>
+         <div class="vprint-detail">
+           <div class="vprint-match">${vsim.sim>=75?'Likely your regular bird':'Possibly a different individual'}</div>
+           <div class="vprint-sub">${vsim.sessions} vocal fingerprints since ${vsim.firstDate}</div>
+         </div>
+       </div>
+       <div class="vprint-bar-wrap"><div class="vprint-bar" style="width:${vsim.sim}%;background:${vsim.sim>=75?'var(--sage2)':vsim.sim>=50?'var(--gold2)':'var(--t2)'}"></div></div>
+       <div class="t-note">Based on spectral centroid, spread & tonality across visits at this location</div>
      </div>`:''}
      ${tiles?`<div class="grid">${tiles}</div>`:''}
      ${about?`<div class="fact">
