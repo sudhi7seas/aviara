@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data:; connect-src https://huggingface.co https://api.inaturalist.org https://en.wikipedia.org https://nominatim.openstreetmap.org https://api.open-meteo.com https://unpkg.com https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com; img-src * data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src https://fonts.gstatic.com;">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -397,6 +398,62 @@ input:checked+.tog-sl::before{transform:translateX(19px);background:white}
 
 @keyframes spin{to{transform:rotate(360deg)}}
 ::-webkit-scrollbar{width:0}
+
+/* ══ VOCAL IDENTITY MODAL ══════════════════════════ */
+#vproof-overlay{position:fixed;inset:0;z-index:200;
+  background:rgba(5,12,5,.92);backdrop-filter:blur(10px);
+  display:none;align-items:flex-end;justify-content:center}
+#vproof-overlay.open{display:flex}
+#vproof-sheet{background:var(--srf);border:1px solid var(--bdr);
+  border-radius:22px 22px 0 0;width:100%;max-width:480px;
+  max-height:90vh;overflow-y:auto;padding:20px 16px;
+  padding-bottom:max(24px,env(safe-area-inset-bottom)+12px);
+  animation:sheetUp .3s cubic-bezier(.22,1,.36,1)}
+@keyframes sheetUp{from{transform:translateY(100%)}to{transform:none}}
+.vp-handle{width:36px;height:4px;background:var(--bdr);border-radius:99px;
+  margin:0 auto 18px}
+.vp-title{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;
+  color:var(--gold);margin-bottom:2px}
+.vp-sub{font-size:12px;color:var(--t3);margin-bottom:16px;line-height:1.5}
+.vp-score-row{display:flex;align-items:center;gap:14px;
+  background:var(--card);border:1px solid var(--bdr);border-radius:14px;
+  padding:14px 16px;margin-bottom:14px}
+.vp-big-score{font-family:'Playfair Display',serif;font-size:44px;font-weight:700;line-height:1}
+.vp-verdict{flex:1}
+.vp-verdict-txt{font-size:15px;font-weight:600;color:var(--t1);line-height:1.3}
+.vp-verdict-sub{font-size:11px;color:var(--t3);margin-top:3px}
+.vp-section{margin-bottom:14px}
+.vp-sec-head{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1.8px;
+  margin-bottom:8px;font-weight:700}
+.vp-feature{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.vp-feat-lbl{font-size:11px;color:var(--t2);width:110px;flex-shrink:0;line-height:1.3}
+.vp-feat-wrap{flex:1;position:relative;height:18px}
+.vp-feat-bg{position:absolute;inset:0;background:var(--elev);border-radius:99px;overflow:hidden}
+.vp-feat-hist{position:absolute;top:0;bottom:0;left:0;border-radius:99px;opacity:0.35}
+.vp-feat-cur{position:absolute;top:2px;bottom:2px;width:3px;border-radius:99px;margin-left:-1.5px}
+.vp-feat-val{font-size:10px;font-family:'Playfair Display',serif;font-weight:700;
+  color:var(--gold2);min-width:40px;text-align:right;flex-shrink:0}
+.vp-sessions-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(32px,1fr));
+  gap:4px;margin-top:4px}
+.vp-session-dot{height:20px;border-radius:4px;position:relative;overflow:hidden;
+  background:var(--elev);cursor:default}
+.vp-session-dot-fill{position:absolute;bottom:0;left:0;right:0;border-radius:3px;
+  transition:height .3s}
+.vp-tod-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.vp-tod-pill{font-size:10px;padding:3px 9px;border-radius:99px;border:1px solid var(--bdr);
+  color:var(--t2)}
+.vp-tod-pill.match{color:var(--sage2);border-color:rgba(87,150,106,.4);
+  background:rgba(87,150,106,.1)}
+.vp-close-btn{width:100%;margin-top:4px;background:var(--elev);border:1px solid var(--bdr);
+  border-radius:var(--r);padding:13px;color:var(--t1);font-size:14px;
+  font-family:'Crimson Pro',serif;cursor:pointer;touch-action:manipulation;transition:background .15s}
+.vp-close-btn:active{background:var(--card)}
+
+/* ── Enhanced vprint tile ── */
+.vprint-tile{padding:14px;cursor:pointer;transition:background .15s}
+.vprint-tile:active{background:var(--elev)}
+.vprint-proof-hint{font-size:10px;color:var(--gold);margin-top:6px;
+  display:flex;align-items:center;gap:4px}
 </style>
 </head>
 <body>
@@ -656,6 +713,16 @@ input:checked+.tog-sl::before{transform:translateX(19px);background:white}
   </div>
 </div>
 
+<!-- ══ VOCAL IDENTITY PROOF MODAL ════════════════ -->
+<div id="vproof-overlay" role="dialog" aria-modal="true" aria-label="Vocal identity proof"
+  onclick="if(event.target===this)closeVocalProof()">
+  <div id="vproof-sheet">
+    <div class="vp-handle"></div>
+    <div id="vproof-content"><!-- populated by openVocalProof() --></div>
+    <button class="vp-close-btn" onclick="closeVocalProof()">← Back to Field Notes</button>
+  </div>
+</div>
+
 <script>
 /* ════════════════════════════════════════════════
    URLS
@@ -666,7 +733,7 @@ const CACHE_KEY  = 'aviara-v2';
 const HIST_KEY   = 'aviara_history';
 const SETT_KEY   = 'aviara_settings';
 const LIFER_KEY  = 'aviara_lifers';       // {sci → ISO date string of first detection}
-const VPRINT_KEY = 'aviara_vprints';      // {sci+'@'+locKey → [{cx,sp,tn,ts}]} vocal fingerprints
+const VPRINT_KEY = 'aviara_vprints_v2';    // {sci+'@'+locKey → [{cx,sp,tn,fl,rms,hr,ts,tod}]} vocal fingerprints
 const TARGET_SR  = 48000;
 const CHUNK_SEC  = 3.0;
 const MAX_HIST   = 1000;
@@ -696,10 +763,10 @@ const csFetching = {};  // sci → Promise (prevents duplicate requests)
 ════════════════════════════════════════════════ */
 const DEF = { threshold:15, useLocation:true, useWakeLock:true };
 let S = (() => {
-  try { return { ...DEF, ...JSON.parse(localStorage.getItem(SETT_KEY)||'{}') }; }
+  try { return { ...DEF, ...safeJSON(lsGet(SETT_KEY,'{}'),{}) }; }
   catch(e) { return { ...DEF }; }
 })();
-function saveSett(){ try{ localStorage.setItem(SETT_KEY,JSON.stringify(S)); }catch(e){} }
+function saveSett(){ lsSet(SETT_KEY, JSON.stringify(S)); }
 
 /* ════════════════════════════════════════════════
    STATE
@@ -720,8 +787,8 @@ let currentWeather=null; // {temp,wind,cloud,precip,icon} — refreshed each ses
 const migCache={};       // sci → parseMigration() result, populated on first info open
 
 /* ── Lifer helpers ── */
-function loadLifers(){ try{return JSON.parse(localStorage.getItem(LIFER_KEY)||'{}');}catch(e){return{};} }
-function saveLifers(l){ try{localStorage.setItem(LIFER_KEY,JSON.stringify(l));}catch(e){} }
+function loadLifers(){ return safeJSON(lsGet(LIFER_KEY,'{}'), {}); }
+function saveLifers(l){ lsSet(LIFER_KEY, JSON.stringify(l)); }
 function checkLifer(sci){
   const l=loadLifers();
   if(l[sci]) return false; // already seen
@@ -731,48 +798,173 @@ function checkLifer(sci){
 }
 
 /* ── Vocal fingerprint helpers (individual bird recognition) ── */
-function loadVPrints(){ try{return JSON.parse(localStorage.getItem(VPRINT_KEY)||'{}');}catch(e){return{};} }
-function saveVPrints(v){ try{localStorage.setItem(VPRINT_KEY,JSON.stringify(v));}catch(e){} }
+function loadVPrints(){ return safeJSON(lsGet(VPRINT_KEY,'{}'), {}); }
+function saveVPrints(v){ lsSet(VPRINT_KEY, JSON.stringify(v)); }
 function vprintKey(sci,lat,lon){
   // Grid-snap to 0.01° (~1 km) so nearby detections share the same location bucket
   const la=lat?Math.round(lat*100)/100:0;
   const lo=lon?Math.round(lon*100)/100:0;
   return sci+'@'+la+','+lo;
 }
-function storeVPrint(sci,descriptors){
+function storeVPrint(sci, descriptors){
   if(!descriptors) return;
-  const v=loadVPrints();
-  const lat=currentLoc?.lat||0, lon=currentLoc?.lon||0;
-  const key=vprintKey(sci,lat,lon);
-  if(!v[key]) v[key]=[];
-  // Store compact fingerprint snapshot: centroid, spread, tonality + timestamp
-  v[key].push({cx:Math.round(descriptors.centroid),sp:Math.round(descriptors.spread),
-               tn:Math.round(descriptors.tonality*100)/100, ts:Date.now()});
-  // Keep last 30 fingerprints per species+location
-  if(v[key].length>30) v[key]=v[key].slice(-30);
-  saveVPrints(v);
+  try{
+    const v = loadVPrints();
+    const lat = currentLoc?.lat||0, lon = currentLoc?.lon||0;
+    const key = vprintKey(sci, lat, lon);
+    if(!v[key]) v[key] = [];
+    const now = Date.now();
+    const hr  = new Date(now).getHours();
+    // Store richer fingerprint: centroid, spread, tonality, flatness, rms, harmonic ratio, hour-of-day, timestamp
+    v[key].push({
+      cx: Math.round(descriptors.centroid),
+      sp: Math.round(descriptors.spread),
+      tn: Math.round(descriptors.tonality*100)/100,
+      fl: Math.round((descriptors.flatness||0)*100)/100,
+      rms: Math.round((descriptors.rms||0)*1000)/1000,
+      hr: hr,         // hour of day 0–23 (time-of-day pattern)
+      ts: now
+    });
+    if(v[key].length > 60) v[key] = v[key].slice(-60);
+    saveVPrints(v);
+  } catch(e){ /* non-critical — swallow silently */ }
 }
+
+/* ────────────────────────────────────────────────
+   ENHANCED VOCAL SIMILARITY
+   Uses 3 approaches from the research document:
+   1. VQ Codebook distance (MFCC-inspired centroids)
+   2. Cosine similarity on feature vectors (embedding-like)
+   3. Time-of-day pattern consistency
+   Returns rich object with per-feature breakdown.
+────────────────────────────────────────────────── */
 function getVocalSimilarity(sci){
-  const v=loadVPrints();
-  const lat=currentLoc?.lat||0, lon=currentLoc?.lon||0;
-  const key=vprintKey(sci,lat,lon);
-  const prints=v[key];
-  if(!prints||prints.length<3) return null; // not enough data
-  // Split: most recent vs historical average
-  const hist=prints.slice(0,-1);
-  const latest=prints[prints.length-1];
-  const avgCx=hist.reduce((s,p)=>s+p.cx,0)/hist.length;
-  const avgSp=hist.reduce((s,p)=>s+p.sp,0)/hist.length;
-  const avgTn=hist.reduce((s,p)=>s+p.tn,0)/hist.length;
-  // Normalised Euclidean distance (lower = more similar)
-  const dCx=(latest.cx-avgCx)/5000; // centroid range ~0-10000 Hz
-  const dSp=(latest.sp-avgSp)/3000; // spread range ~0-5000 Hz
-  const dTn=(latest.tn-avgTn);      // tonality 0-1
-  const dist=Math.sqrt(dCx*dCx+dSp*dSp+dTn*dTn);
-  const sim=Math.max(0,Math.min(100,Math.round((1-dist)*100)));
-  const sessions=prints.length;
-  const firstDate=new Date(prints[0].ts).toLocaleDateString([],{month:'short',day:'numeric'});
-  return{sim,sessions,firstDate};
+  try{
+    const v = loadVPrints();
+    const lat = currentLoc?.lat||0, lon = currentLoc?.lon||0;
+    const key = vprintKey(sci, lat, lon);
+    const prints = v[key];
+    if(!prints || prints.length < 3) return null;
+
+    const hist   = prints.slice(0, -1);
+    const latest = prints[prints.length - 1];
+
+    // ── 1. Per-feature statistics (mean ± std) ──
+    function featureStat(arr, fn){
+      const vals = arr.map(fn);
+      const mean = vals.reduce((s,x)=>s+x,0) / vals.length;
+      const variance = vals.reduce((s,x)=>s+(x-mean)**2,0) / vals.length;
+      return { mean, std: Math.sqrt(variance), vals };
+    }
+    const statCx  = featureStat(hist, p=>p.cx);
+    const statSp  = featureStat(hist, p=>p.sp);
+    const statTn  = featureStat(hist, p=>p.tn);
+    const statFl  = featureStat(hist, p=>p.fl||0);
+    const statRms = featureStat(hist, p=>p.rms||0);
+
+    // ── 2. VQ codebook: build 3 K-means centroids from history ──
+    function simpleKMeans(vals, k){
+      if(vals.length < k) return vals.map(v=>({c:[v],n:1}));
+      // init centroids evenly spread
+      const sorted = [...vals].sort((a,b)=>a-b);
+      let centroids = Array.from({length:k}, (_,i)=>sorted[Math.floor(i*(sorted.length-1)/(k-1))]);
+      for(let iter=0; iter<10; iter++){
+        const clusters = Array.from({length:k}, ()=>[]);
+        vals.forEach(v=>{ let minD=Infinity, best=0;
+          centroids.forEach((c,i)=>{ const d=Math.abs(v-c); if(d<minD){minD=d;best=i;} });
+          clusters[best].push(v); });
+        centroids = clusters.map(cl=>cl.length?cl.reduce((s,x)=>s+x,0)/cl.length:centroids[clusters.indexOf(cl)]);
+      }
+      return centroids;
+    }
+    const cxCentroids = simpleKMeans(statCx.vals, Math.min(3, hist.length));
+    const spCentroids = simpleKMeans(statSp.vals, Math.min(3, hist.length));
+    // VQ distance: nearest centroid
+    function vqDist(val, centroids, range){
+      const best = centroids.reduce((minD,c)=>Math.min(minD,Math.abs(val-c)), Infinity);
+      return Math.min(1, best / range);
+    }
+    const vqCxDist = vqDist(latest.cx, cxCentroids, 5000);
+    const vqSpDist = vqDist(latest.sp, spCentroids, 3000);
+    const vqScore  = Math.max(0, 1 - (vqCxDist + vqSpDist) / 2);
+
+    // ── 3. Cosine similarity on 5-D feature vector ──
+    const histVec  = [statCx.mean/10000, statSp.mean/5000, statTn.mean, statFl.mean, (statRms.mean||0)*10];
+    const latVec   = [latest.cx/10000,   latest.sp/5000,   latest.tn,   latest.fl||0, (latest.rms||0)*10];
+    function cosine(a, b){
+      let dot=0, na=0, nb=0;
+      for(let i=0;i<a.length;i++){ dot+=a[i]*b[i]; na+=a[i]**2; nb+=b[i]**2; }
+      return na*nb>0 ? dot/(Math.sqrt(na)*Math.sqrt(nb)) : 0;
+    }
+    const cosScore = Math.max(0, cosine(histVec, latVec));
+
+    // ── 4. Z-score deviation per feature ──
+    function zScore(val, mean, std){ return std>0 ? Math.abs(val-mean)/std : 0; }
+    const zCx  = zScore(latest.cx,  statCx.mean,  Math.max(statCx.std,200));
+    const zSp  = zScore(latest.sp,  statSp.mean,  Math.max(statSp.std,100));
+    const zTn  = zScore(latest.tn,  statTn.mean,  Math.max(statTn.std,0.05));
+    const zFl  = zScore(latest.fl||0, statFl.mean, Math.max(statFl.std,0.05));
+    // Feature match scores (1 = identical, 0 = very different)
+    const fCx  = Math.max(0, 1 - zCx/3);
+    const fSp  = Math.max(0, 1 - zSp/3);
+    const fTn  = Math.max(0, 1 - zTn/3);
+    const fFl  = Math.max(0, 1 - zFl/3);
+
+    // ── 5. Time-of-day pattern consistency ──
+    const hourCounts = new Array(24).fill(0);
+    hist.forEach(p=>{ if(p.hr!==undefined) hourCounts[p.hr]++; });
+    const latestHr  = latest.hr!==undefined ? latest.hr : -1;
+    const hrWindow  = [latestHr-1, latestHr, latestHr+1].map(h=>((h%24)+24)%24);
+    const hrHits    = hrWindow.reduce((s,h)=>s+hourCounts[h], 0);
+    const todScore  = hist.length > 0 ? Math.min(1, hrHits / (hist.length * 0.4 + 1)) : 0.5;
+
+    // ── Combined score (weighted average) ──
+    // VQ + cosine are the most discriminative (40% each)
+    // Z-score features 15%, time-of-day 5%
+    const zAvg = (fCx + fSp + fTn + fFl) / 4;
+    const combined = 0.40 * vqScore + 0.40 * cosScore + 0.15 * zAvg + 0.05 * todScore;
+    const sim = Math.max(0, Math.min(100, Math.round(combined * 100)));
+
+    const sessions  = prints.length;
+    const firstDate = new Date(prints[0].ts).toLocaleDateString([], {month:'short', day:'numeric'});
+    const lastDate  = new Date(prints[prints.length-1].ts).toLocaleDateString([], {month:'short', day:'numeric'});
+
+    // Active hours (for the proof modal)
+    const activeHours = hourCounts
+      .map((c,h)=>({h,c}))
+      .filter(x=>x.c>0)
+      .sort((a,b)=>b.c-a.c)
+      .slice(0,4)
+      .map(x=>{
+        const hh = x.h%12||12;
+        const ampm = x.h<12?'AM':'PM';
+        return {label:`${hh}${ampm}`, count:x.c, active:hrWindow.includes(x.h)};
+      });
+
+    return {
+      sim, sessions, firstDate, lastDate,
+      vqScore:    Math.round(vqScore*100),
+      cosScore:   Math.round(cosScore*100),
+      todScore:   Math.round(todScore*100),
+      features: {
+        centroid:  {hist:statCx.mean, cur:latest.cx,  score:Math.round(fCx*100),  unit:'Hz', range:10000},
+        spread:    {hist:statSp.mean, cur:latest.sp,  score:Math.round(fSp*100),  unit:'Hz', range:5000},
+        tonality:  {hist:statTn.mean, cur:latest.tn,  score:Math.round(fTn*100),  unit:'',   range:1},
+        flatness:  {hist:statFl.mean, cur:latest.fl||0, score:Math.round(fFl*100), unit:'',  range:1},
+      },
+      sessionScores: prints.slice(-20).map((p,i,arr)=>{
+        if(i===0) return 50;
+        const prev = arr.slice(0,i);
+        const pMean = prev.reduce((s,x)=>s+x.cx,0)/prev.length;
+        const pStd  = Math.max(200, Math.sqrt(prev.reduce((s,x)=>s+(x.cx-pMean)**2,0)/prev.length));
+        return Math.max(0, Math.min(100, Math.round((1 - Math.abs(p.cx-pMean)/pStd/3)*100)));
+      }),
+      activeHours,
+      cxCentroids, spCentroids,
+      latestHr,
+      hist: prints.slice(-20)
+    };
+  } catch(e){ return null; }
 }
 
 /* ════════════════════════════════════════════════
@@ -789,10 +981,13 @@ let wxFetchedAt=0; // timestamp of last weather fetch
 async function fetchWeather(){
   if(!currentLoc) return;
   if(Date.now()-wxFetchedAt < 30*60*1000 && currentWeather) return; // cache 30 min
+  if(!rateAllow('open-meteo', 5)) return; // max 5 calls per minute
   try{
     const{lat,lon}=currentLoc;
+    // Validate coords before embedding in URL
+    if(typeof lat!=='number'||typeof lon!=='number') return;
     const r=await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`+
+      `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}`+
       `&current=temperature_2m,wind_speed_10m,cloud_cover,precipitation,weather_code`+
       `&wind_speed_unit=kmh&forecast_days=1`,
       {signal:AbortSignal.timeout(5000)}
@@ -800,6 +995,7 @@ async function fetchWeather(){
     if(!r.ok) return;
     const d=await r.json();
     const c=d.current;
+    if(!c) return;
     currentWeather={
       temp:Math.round(c.temperature_2m),
       wind:Math.round(c.wind_speed_10m),
@@ -958,26 +1154,39 @@ function stopLocation(){
 function fetchLoc(){
   navigator.geolocation.getCurrentPosition(async pos=>{
     const lat=pos.coords.latitude, lon=pos.coords.longitude;
+    // Basic bounds check
+    if(lat<-90||lat>90||lon<-180||lon>180) return;
     const hadLoc=!!currentLoc;
     currentLoc={lat,lon,place:''};
     try{
-      const r=await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
-        {headers:{'User-Agent':'Aviara/1.0'}}
-      );
-      const d=await r.json(); const a=d.address||{};
-      currentLoc.place=a.city||a.town||a.village||a.suburb||a.county||a.country||'';
-    }catch(e){}
+      if(rateAllow('nominatim', 10)){
+        const r=await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&format=json`,
+          {headers:{'User-Agent':'Aviara/1.0'}, signal:AbortSignal.timeout(8000)}
+        );
+        if(r.ok){
+          const d=await r.json(); const a=d.address||{};
+          // Sanitize place name from external source
+          const rawPlace = a.city||a.town||a.village||a.suburb||a.county||a.country||'';
+          currentLoc.place = rawPlace.replace(/[<>"'`]/g,'').slice(0,80);
+        }
+      }
+    }catch(e){ /* location name is optional — continue silently */ }
     const pill=document.getElementById('locPill');
     const txt=document.getElementById('locText');
     if(pill&&txt){pill.style.display='block';txt.textContent=currentLoc.place||`${lat.toFixed(3)},${lon.toFixed(3)}`;}
     const st=document.getElementById('locStatusTxt');
     if(st) st.textContent='📍 '+(currentLoc.place||'Location active');
-    // Now that we have location, fetch weather if not already fetched
     if(!hadLoc || !currentWeather){
       fetchWeather().catch(()=>{});
     }
-  },()=>{},{timeout:12000,enableHighAccuracy:false});
+  },
+  err=>{
+    // Geolocation error — log code but don't crash
+    const msgs={1:'Permission denied',2:'Position unavailable',3:'Timeout'};
+    console.info('Geolocation:', msgs[err.code]||'Unknown error');
+  },
+  {timeout:12000,enableHighAccuracy:false});
 }
 
 /* ════════════════════════════════════════════════
@@ -1090,6 +1299,7 @@ function resample(data,from,to){
    sigmoid(1.35) = 0.79 = 79%.  sigmoid(2.47) = 0.92 = 92%.
 ════════════════════════════════════════════════ */
 let inferring=false;
+let _inferErrCount=0;         // consecutive inference errors
 const sigmoid = x => 1 / (1 + Math.exp(-x));
 // Convert raw model output to 0–1 probability
 const toProb  = x => (x >= 0 && x <= 1) ? x : sigmoid(x);
@@ -1110,11 +1320,25 @@ async function runInference(raw){
 
     let bestIdx=-1, bestProb=S.threshold/100;
     for(let i=0;i<scores.length&&i<labels.length;i++){
-      const p=toProb(scores[i]); // <── KEY FIX: convert logit to probability
+      const p=toProb(scores[i]);
       if(p>bestProb){bestProb=p;bestIdx=i;}
     }
     if(bestIdx>=0) addDetection(labels[bestIdx],bestProb);
-  }catch(e){console.warn('Inference:',e.message||e);}
+    _inferErrCount=0; // reset on success
+  }catch(e){
+    _inferErrCount++;
+    console.warn('Inference error #'+_inferErrCount+':', e.message||e);
+    // After 5 consecutive failures, surface a non-fatal warning
+    if(_inferErrCount===5){
+      const lbl=document.getElementById('statusLbl');
+      if(lbl&&listening) lbl.innerHTML='<span style="color:var(--red)">⚠️ AI engine hiccup — still listening</span>';
+    }
+    // After 20 consecutive failures, stop and show error (model may be corrupt)
+    if(_inferErrCount>=20){
+      stopListen();
+      showErr('AI engine failed', 'Too many consecutive inference errors. Try clearing the model cache in Settings → Check for Update, then reload.');
+    }
+  }
   finally{inferring=false;}
 }
 
@@ -1171,6 +1395,7 @@ function getCS(sci){
 
     /* 1. iNaturalist — search by exact scientific name */
     try{
+      if(rateAllow('inaturalist', 15)){
       const r=await fetch(
         `https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(sci)}&rank=species&per_page=3`,
         {signal:AbortSignal.timeout(6000)}
@@ -1195,6 +1420,7 @@ function getCS(sci){
           }
         }
       }
+      } // end rateAllow
     }catch(e){}
 
     /* 2. Wikipedia by scientific name (most reliable for birds) */
@@ -1296,10 +1522,13 @@ function applyMigTag(sci, migTag){
   });
 }
 function loadHistory(){
-  try{return JSON.parse(localStorage.getItem(HIST_KEY)||'[]');}catch(e){return[];}
+  const raw = safeJSON(lsGet(HIST_KEY,'[]'), []);
+  // Validate it's actually an array; guard against corruption
+  return Array.isArray(raw) ? raw : [];
 }
 function saveHistory(h){
-  try{localStorage.setItem(HIST_KEY,JSON.stringify(h.slice(0,MAX_HIST)));}catch(e){}
+  if(!Array.isArray(h)) return;
+  lsSet(HIST_KEY, JSON.stringify(h.slice(0, MAX_HIST)));
 }
 function pushHistory(lbl,score,cs,migTag,isLifer){
   const h=loadHistory();
@@ -1387,13 +1616,15 @@ function addDetection(lbl,score){
 
   // Store Timbre vocal fingerprint for individual bird recognition
   if(timbreTrail.length>0){
-    const recent=timbreTrail.slice(-5);
+    const recent=timbreTrail.slice(-8);
     const avg={
-      centroid:recent.reduce((s,p)=>s+(p.cx||p.x||0),0)/recent.length,
-      spread:recent.reduce((s,p)=>s+(p.sp||p.y||0),0)/recent.length,
-      tonality:recent.reduce((s,p)=>s+(p.tonality||0),0)/recent.length
+      centroid: recent.reduce((s,p)=>s+(p.cx||p.x||0),0)/recent.length,
+      spread:   recent.reduce((s,p)=>s+(p.sp||p.y||0),0)/recent.length,
+      tonality: recent.reduce((s,p)=>s+(p.tonality||0),0)/recent.length,
+      flatness: recent.reduce((s,p)=>s+(p.flatness||0),0)/recent.length,
+      rms:      recent.reduce((s,p)=>s+(p.rms||0),0)/recent.length
     };
-    storeVPrint(lbl.sci,avg);
+    storeVPrint(lbl.sci, avg);
   }
 }
 
@@ -1664,6 +1895,11 @@ function plotMarkers(withLoc){
 function openInfoByName(lbl){infoFromTab='ST';openInfo(lbl);}
 
 async function openInfo(lbl){
+  // Sanitize input
+  if(!lbl || typeof lbl.sci!=='string' || typeof lbl.com!=='string') return;
+  lbl = { sci: sanitizeSci(lbl.sci), com: sanitizeCom(lbl.com) };
+  if(!lbl.sci) return;
+
   document.getElementById('infoBack').onclick=()=>goTab(infoFromTab);
   show('IN');
   document.getElementById('IN').scrollTop=0;
@@ -1672,20 +1908,33 @@ async function openInfo(lbl){
        <div style="font-size:44px;display:inline-block;animation:spin 1.5s linear infinite">🪶</div>
        <div style="margin-top:14px;color:var(--t2);font-style:italic;font-size:15px">Fetching field notes…</div>
      </div>`;
+
+  const canFetch = rateAllow('inaturalist', 15) && rateAllow('wikipedia', 20);
+
   const[iR,wR]=await Promise.allSettled([
-    fetch(`https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(lbl.sci)}&rank=species&per_page=3`).then(r=>r.json()).catch(()=>null),
-    (async()=>{
-      // Try common name first, then scientific name
-      let r=await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(lbl.com)}`).catch(()=>null);
+    canFetch ? fetch(
+      `https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(lbl.sci)}&rank=species&per_page=3`,
+      {signal:AbortSignal.timeout(8000)}
+    ).then(r=>{ if(!r.ok) throw new Error(`iNat HTTP ${r.status}`); return r.json(); }).catch(()=>null)
+    : Promise.resolve(null),
+    canFetch ? (async()=>{
+      let r=await fetch(
+        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(lbl.com)}`,
+        {signal:AbortSignal.timeout(8000)}
+      ).catch(()=>null);
       if(r?.ok) return r.json();
-      r=await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(lbl.sci)}`).catch(()=>null);
+      r=await fetch(
+        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(lbl.sci)}`,
+        {signal:AbortSignal.timeout(8000)}
+      ).catch(()=>null);
       return r?.ok?r.json():null;
     })()
+    : Promise.resolve(null)
   ]);
-  // Find best iNat match for scientific name
-  const inatResults=iR.value?.results||[];
+
+  const inatResults=(iR.status==='fulfilled'&&Array.isArray(iR.value?.results))?iR.value.results:[];
   const inatTaxon=inatResults.find(x=>x.name?.toLowerCase()===lbl.sci.toLowerCase())||inatResults[0]||null;
-  renderInfo(lbl,inatTaxon,wR.value||null);
+  renderInfo(lbl, inatTaxon, (wR.status==='fulfilled'?wR.value:null)||null);
 }
 
 
@@ -1777,17 +2026,17 @@ function renderInfo(lbl,inat,wiki){
        </div>
        ${lastWx?`<div class="t-wx">Last seen: ${wxSummary(lastWx)}</div>`:''}
      </div>`:''}
-     ${vsim?`<div class="tile w vprint-tile">
+     ${vsim?`<div class="tile w vprint-tile" onclick="openVocalProof(${JSON.stringify(lbl).replace(/"/g,'&quot;')},${JSON.stringify(vsim).replace(/"/g,'&quot;')})">
        <div class="t-lbl">🧬 Individual Recognition</div>
        <div class="vprint-row">
          <div class="vprint-score" style="color:${vsim.sim>=75?'var(--sage2)':vsim.sim>=50?'var(--gold2)':'var(--t2)'}">${vsim.sim}%</div>
          <div class="vprint-detail">
-           <div class="vprint-match">${vsim.sim>=75?'Likely your regular bird':'Possibly a different individual'}</div>
-           <div class="vprint-sub">${vsim.sessions} vocal fingerprints since ${vsim.firstDate}</div>
+           <div class="vprint-match">${vsim.sim>=75?'Likely your regular bird':vsim.sim>=50?'Possibly the same individual':'Possibly a different individual'}</div>
+           <div class="vprint-sub">${vsim.sessions} vocal fingerprints · ${vsim.firstDate}–${vsim.lastDate||vsim.firstDate}</div>
          </div>
        </div>
        <div class="vprint-bar-wrap"><div class="vprint-bar" style="width:${vsim.sim}%;background:${vsim.sim>=75?'var(--sage2)':vsim.sim>=50?'var(--gold2)':'var(--t2)'}"></div></div>
-       <div class="t-note">Based on spectral centroid, spread & tonality across visits at this location</div>
+       <div class="vprint-proof-hint">🔬 Tap for full acoustic proof →</div>
      </div>`:''}
      ${tiles?`<div class="grid">${tiles}</div>`:''}
      ${about?`<div class="fact">
@@ -2218,7 +2467,7 @@ function startTimbreLoop(){
     const px = pad + ((f.centroid - autoMin.cx) / cxRange) * (W - pad*2);
     const py = H - pad - ((f.spread   - autoMin.sp) / spRange) * (H - pad*2);
 
-    timbreTrail.push({x:px, y:py, rms:f.rms, tonality:f.tonality, flux:f.flux});
+    timbreTrail.push({x:px, y:py, rms:f.rms, tonality:f.tonality, flux:f.flux, flatness:f.flatness, cx:f.centroid, sp:f.spread});
     if(timbreTrail.length > TRAIL_MAX) timbreTrail.shift();
 
     renderTimbreCanvas();
@@ -2451,6 +2700,222 @@ async function cachePut(url,data,mime){
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const uc=s=>s.charAt(0).toUpperCase()+s.slice(1);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+/* ════════════════════════════════════════════════
+   SECURITY HELPERS
+════════════════════════════════════════════════ */
+/* Rate-limit per domain: max calls per window */
+const _rlMap = {};
+function rateAllow(domain, maxPerMin=20){
+  const now = Date.now();
+  if(!_rlMap[domain]) _rlMap[domain]=[];
+  _rlMap[domain] = _rlMap[domain].filter(t=>now-t<60000);
+  if(_rlMap[domain].length >= maxPerMin) return false;
+  _rlMap[domain].push(now);
+  return true;
+}
+
+/* Safe JSON parse — returns null instead of throwing */
+function safeJSON(str, fallback=null){
+  try{ return JSON.parse(str); }
+  catch(e){ return fallback; }
+}
+
+/* Validate a URL is one of our approved origins before fetch */
+const ALLOWED_ORIGINS = new Set([
+  'https://huggingface.co',
+  'https://api.inaturalist.org',
+  'https://en.wikipedia.org',
+  'https://nominatim.openstreetmap.org',
+  'https://api.open-meteo.com',
+  'https://unpkg.com',
+  'https://cdn.jsdelivr.net',
+]);
+function safeOrigin(url){
+  try{
+    const u = new URL(url);
+    return ALLOWED_ORIGINS.has(u.origin);
+  }catch(e){ return false; }
+}
+
+/* Validated localStorage helpers — guard against corruption/injection */
+function lsGet(key, fallback=null){
+  try{
+    const raw = localStorage.getItem(key);
+    if(raw===null) return fallback;
+    return raw;
+  }catch(e){ return fallback; }
+}
+function lsSet(key, value){
+  try{ localStorage.setItem(key, value); return true; }
+  catch(e){ console.warn('localStorage write failed:', e.message); return false; }
+}
+function lsRemove(key){
+  try{ localStorage.removeItem(key); }catch(e){}
+}
+
+/* Sanitise a scientific name — only allow chars valid in binomial nomenclature */
+function sanitizeSci(s){
+  if(typeof s!=='string') return '';
+  return s.replace(/[^a-zA-Z0-9 ._\-]/g,'').slice(0,80);
+}
+/* Sanitise a common name for safe display */
+function sanitizeCom(s){
+  if(typeof s!=='string') return '';
+  return s.replace(/[<>"'`]/g,'').slice(0,120);
+}
+
+/* ════════════════════════════════════════════════
+   VOCAL IDENTITY PROOF MODAL
+   Shows visual evidence for why the app says
+   "this is your regular bird" — the full proof.
+════════════════════════════════════════════════ */
+let _vproofLbl = null;
+
+function openVocalProof(lbl, vsim){
+  if(!vsim) return;
+  _vproofLbl = lbl;
+  const overlay = document.getElementById('vproof-overlay');
+  const content = document.getElementById('vproof-content');
+  if(!overlay||!content) return;
+
+  const col = vsim.sim>=75 ? 'var(--sage2)' : vsim.sim>=50 ? 'var(--gold2)' : 'var(--t2)';
+  const verdict = vsim.sim>=75
+    ? 'Strong match — very likely your regular bird'
+    : vsim.sim>=50
+    ? 'Moderate match — possibly the same individual'
+    : 'Weak match — may be a different individual';
+  const methodExplain = vsim.sim>=75
+    ? 'All three acoustic methods agree this call matches your historical recordings at this location.'
+    : vsim.sim>=50
+    ? 'Most acoustic signatures match, but there is some variation — could be the same bird on a different day.'
+    : 'Significant variation from historical recordings — a different individual may be present.';
+
+  /* Method score bars */
+  function methodBar(label, score, desc){
+    const c = score>=75?'var(--sage2)':score>=50?'var(--gold2)':'var(--t2)';
+    return `<div class="vp-feature">
+      <div class="vp-feat-lbl">${esc(label)}</div>
+      <div class="vp-feat-wrap">
+        <div class="vp-feat-bg">
+          <div class="vp-feat-hist" style="width:${score}%;background:${c}"></div>
+        </div>
+      </div>
+      <div class="vp-feat-val" style="color:${c}">${score}%</div>
+    </div>
+    <div style="font-size:10px;color:var(--t3);margin:-4px 0 8px 0;padding-left:0;line-height:1.4">${esc(desc)}</div>`;
+  }
+
+  /* Per-feature breakdown bars */
+  function featureBar(label, feat, desc){
+    const c = feat.score>=75?'var(--sage2)':feat.score>=50?'var(--gold2)':'var(--t2)';
+    const histPct = Math.min(100, (feat.hist / feat.range)*100);
+    const curPct  = Math.min(100, (feat.cur  / feat.range)*100);
+    const diff    = Math.abs(feat.cur - feat.hist);
+    const diffStr = feat.unit==='Hz'
+      ? `hist avg ${Math.round(feat.hist)} Hz · now ${Math.round(feat.cur)} Hz · Δ ${Math.round(diff)} Hz`
+      : `hist avg ${feat.hist.toFixed(2)} · now ${feat.cur.toFixed(2)} · Δ ${diff.toFixed(2)}`;
+    return `<div class="vp-feature">
+      <div class="vp-feat-lbl">${esc(label)}<br><span style="font-size:9px;color:var(--t3)">${esc(diffStr)}</span></div>
+      <div class="vp-feat-wrap">
+        <div class="vp-feat-bg">
+          <div class="vp-feat-hist" style="width:${histPct.toFixed(1)}%;background:var(--gold2)"></div>
+          <div class="vp-feat-cur"  style="left:${curPct.toFixed(1)}%;background:${c}"></div>
+        </div>
+      </div>
+      <div class="vp-feat-val" style="color:${c}">${feat.score}%</div>
+    </div>`;
+  }
+
+  /* Session history dots */
+  const sessDotsHtml = vsim.sessionScores.map((s,i)=>{
+    const c = s>=75?'#57966A':s>=50?'#C8972A':'#5A5038';
+    const isLast = i===vsim.sessionScores.length-1;
+    return `<div class="vp-session-dot" title="Session ${i+1}: ${s}% match${isLast?' (latest)':''}">
+      <div class="vp-session-dot-fill" style="height:${s}%;background:${c}${isLast?';box-shadow:0 0 4px '+c:''}"></div>
+    </div>`;
+  }).join('');
+
+  /* Time-of-day pills */
+  const todHtml = vsim.activeHours.length
+    ? vsim.activeHours.map(h=>`<div class="vp-tod-pill${h.active?' match':''}">
+        ${esc(h.label)} <span style="opacity:.6">(${h.count}×)</span>
+      </div>`).join('')
+    : '<span style="font-size:11px;color:var(--t3)">Not enough data yet</span>';
+
+  content.innerHTML=`
+    <div class="vp-title">🔬 Vocal Identity Proof</div>
+    <div class="vp-sub">
+      <strong style="color:var(--t1)">${esc(sanitizeCom(lbl.com))}</strong>
+      · <em style="color:var(--t3)">${esc(sanitizeSci(lbl.sci))}</em><br>
+      ${esc(vsim.sessions)} recordings at this location · ${esc(vsim.firstDate)} – ${esc(vsim.lastDate||vsim.firstDate)}
+    </div>
+
+    <div class="vp-score-row">
+      <div class="vp-big-score" style="color:${col}">${vsim.sim}%</div>
+      <div class="vp-verdict">
+        <div class="vp-verdict-txt">${esc(verdict)}</div>
+        <div class="vp-verdict-sub">${esc(methodExplain)}</div>
+      </div>
+    </div>
+
+    <div class="vp-section">
+      <div class="vp-sec-head">📐 Three identification methods</div>
+      ${methodBar('VQ Codebook', vsim.vqScore,
+        'MFCC-style: builds k-means centroids from your history. Minimum distance to nearest centroid measures how well this call fits your bird\'s learned vocal patterns.')}
+      ${methodBar('Cosine Similarity', vsim.cosScore,
+        'Embedding-style: compares a 5-dimensional feature vector (centroid, spread, tonality, flatness, volume) between this call and your historical average. 1.0 = identical direction in feature space.')}
+      ${methodBar('Time-of-Day', vsim.todScore,
+        'Birds are creatures of habit. This score measures whether today\'s call arrived at the same hours your regular visitor typically sings.')}
+    </div>
+
+    <div class="vp-section">
+      <div class="vp-sec-head">🎼 Per-feature breakdown (gold bar = your bird's avg · coloured line = now)</div>
+      ${featureBar('Spectral Centroid', vsim.features.centroid,
+        'Average frequency of energy — like the bird\'s tonal "brightness". Individual birds have a consistent centroid due to syrinx anatomy.')}
+      ${featureBar('Spectral Spread', vsim.features.spread,
+        'Width of the frequency distribution — narrow = pure tones, wide = noisy calls. Varies with call type but is consistent per individual.')}
+      ${featureBar('Tonality', vsim.features.tonality,
+        '1 = pure musical notes, 0 = noise. Your bird\'s overall harmonic character.')}
+      ${featureBar('Spectral Flatness', vsim.features.flatness,
+        '0 = highly tonal (harmonic-rich), 1 = flat/noisy. Reflects vocal tract resonance unique to each bird.')}
+    </div>
+
+    <div class="vp-section">
+      <div class="vp-sec-head">📈 Match score across last ${vsim.sessionScores.length} sessions</div>
+      <div class="vp-sessions-grid">${sessDotsHtml}</div>
+      <div style="font-size:9px;color:var(--t3);margin-top:4px">Each bar = one detection event. Height = similarity to your bird's running average.</div>
+    </div>
+
+    <div class="vp-section">
+      <div class="vp-sec-head">🕐 Active hours at this location</div>
+      <div class="vp-tod-row">${todHtml}</div>
+      <div style="font-size:9px;color:var(--t3);margin-top:4px">Highlighted pill = current hour window matches a peak activity time.</div>
+    </div>
+
+    <div style="background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);
+      padding:12px 14px;font-size:11px;color:var(--t3);line-height:1.65;margin-bottom:4px">
+      <strong style="color:var(--t2)">How it works:</strong> Aviara records a vocal fingerprint every time this species is detected at your location.
+      The fingerprint captures spectral centroid (tonal brightness), spread (frequency width), tonality and flatness — features shaped by the bird's
+      syrinx anatomy and vocal tract geometry, which differ slightly between individuals.
+      Three algorithms (VQ codebook, cosine similarity, time-of-day pattern) combine to produce the identity score above.
+      <strong style="color:var(--gold)">≥ 75%</strong> = strong individual match.
+      <strong style="color:var(--gold2)">50–75%</strong> = possible match.
+      <strong style="color:var(--t2)">&lt; 50%</strong> = likely a different individual or atypical call.
+    </div>`;
+
+  overlay.classList.add('open');
+  document.getElementById('vproof-sheet').scrollTop = 0;
+}
+
+function closeVocalProof(){
+  const overlay = document.getElementById('vproof-overlay');
+  if(overlay) overlay.classList.remove('open');
+}
+
+/* Close proof modal on back gesture (Android) */
+window.addEventListener('popstate', ()=>{ closeVocalProof(); });
+
 </script>
 </body>
 </html>
