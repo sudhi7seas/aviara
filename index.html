@@ -1063,112 +1063,54 @@ window.addEventListener('load', async () => {
    LABELS
 ════════════════════════════════════════════════ */
 async function loadLabels(){
-  let text = await cacheGet(LABELS_URL, 'text');
+  let text=await cacheGet(LABELS_URL,'text');
   if(!text){
-    let r, lastErr;
-    for(let attempt = 0; attempt < 3; attempt++){
-      try{
-        if(attempt > 0) await sleep(1000 * attempt);
-        r = await fetch(LABELS_URL);
-        if(r.ok) break;
-        lastErr = `Labels server returned HTTP ${r.status}`;
-        r = null;
-      }catch(e){
-        lastErr = e.message || String(e);
-        r = null;
-      }
-    }
-    if(!r) throw new Error('Could not load labels: ' + lastErr);
-    text = await r.text();
-    cachePut(LABELS_URL, text, 'text/plain');
+    let r;
+    try{ r=await fetch(LABELS_URL); }
+    catch(e){ throw new Error('Cannot load labels. Check internet connection.\nDetail: '+(e.message||String(e))); }
+    if(!r.ok) throw new Error(`Labels not found (HTTP ${r.status})`);
+    text=await r.text();
+    cachePut(LABELS_URL,text,'text/plain');
   }
-  return text.trim().split('\n').map(line => {
-    line = line.trim();
-    const i = line.indexOf('_');
-    if(i < 0) return {sci: line, com: line};
-    return {sci: line.slice(0, i), com: line.slice(i + 1)};
-  }).filter(l => l.sci.length > 0);
+  return text.trim().split('\n').map(line=>{
+    line=line.trim(); const i=line.indexOf('_');
+    if(i<0) return{sci:line,com:line};
+    return{sci:line.slice(0,i),com:line.slice(i+1)};
+  }).filter(l=>l.sci.length>0);
 }
 
 /* ════════════════════════════════════════════════
    MODEL DOWNLOAD
 ════════════════════════════════════════════════ */
 async function downloadModel(){
-  const cached = await cacheGet(MODEL_URL, 'buffer');
+  const cached=await cacheGet(MODEL_URL,'buffer');
   if(cached){
     setProg(85);
-    document.getElementById('st2txt').textContent = 'Loading cached model…';
+    document.getElementById('st2txt').textContent='Loading cached model…';
     return cached;
   }
-
-  // ── Quick connectivity probe before committing to large download ──
-  document.getElementById('st2txt').textContent = 'Connecting to model server…';
-  let probeOk = false;
-  let probeErr = '';
-  try{
-    // Plain fetch — no mode:'cors', same as original working code
-    const probe = await fetch(LABELS_URL, {
-      method: 'HEAD',
-      signal: AbortSignal.timeout(8000)
-    });
-    probeOk = probe.ok || probe.status === 405;
-  }catch(e){
-    probeErr = e.message || String(e);
-  }
-
-  if(!probeOk){
-    throw new Error(
-      `Cannot reach model server.\n\nDetail: ${probeErr||'No response'}\n\n` +
-      `• Check your internet connection and try again\n` +
-      `• The model host (huggingface.co) may be temporarily down`
-    );
-  }
-
-  // ── Stream download with retries ──
-  let res, lastErr;
-  for(let attempt = 0; attempt < 3; attempt++){
-    try{
-      if(attempt > 0){
-        document.getElementById('st2txt').textContent = `Retrying download (attempt ${attempt + 1})…`;
-        await sleep(1500 * attempt);
-      }
-      res = await fetch(MODEL_URL);   // plain fetch — no mode:'cors', same as original
-      if(res.ok) break;
-      lastErr = `HTTP ${res.status} ${res.statusText}`;
-      res = null;
-    }catch(e){
-      lastErr = e.message || String(e);
-      res = null;
+  let res;
+  try{ res=await fetch(MODEL_URL); }
+  catch(e){ throw new Error('Cannot reach HuggingFace. Check internet connection.\nDetail: '+( e.message||String(e))); }
+  if(!res.ok) throw new Error(`Model download failed (HTTP ${res.status})`);
+  const total=parseInt(res.headers.get('Content-Length')||'0');
+  const reader=res.body.getReader();
+  const parts=[]; let got=0;
+  while(true){
+    const{done,value}=await reader.read(); if(done) break;
+    parts.push(value); got+=value.length;
+    if(total>0){
+      setProg(10+Math.round(got/total*72));
+      document.getElementById('st2txt').textContent=
+        `Downloading BirdNET… ${(got/1e6).toFixed(1)} / ${(total/1e6).toFixed(1)} MB`;
+    } else {
+      document.getElementById('st2txt').textContent=
+        `Downloading BirdNET… ${(got/1e6).toFixed(1)} MB`;
     }
   }
-
-  if(!res) throw new Error(`Model download failed after 3 attempts: ${lastErr}`);
-
-  const total = parseInt(res.headers.get('Content-Length') || '0');
-  const reader = res.body.getReader();
-  const parts = []; let got = 0;
-
-  try{
-    while(true){
-      const {done, value} = await reader.read();
-      if(done) break;
-      parts.push(value); got += value.length;
-      if(total > 0){
-        setProg(10 + Math.round(got / total * 72));
-        document.getElementById('st2txt').textContent =
-          `Downloading BirdNET… ${(got/1e6).toFixed(1)} / ${(total/1e6).toFixed(1)} MB`;
-      } else {
-        document.getElementById('st2txt').textContent =
-          `Downloading BirdNET… ${(got/1e6).toFixed(1)} MB`;
-      }
-    }
-  }catch(e){
-    throw new Error(`Download interrupted: ${e.message || e}. Please try again.`);
-  }
-
-  const all = new Uint8Array(got); let off = 0;
-  for(const p of parts){ all.set(p, off); off += p.length; }
-  cachePut(MODEL_URL, all.buffer, 'application/octet-stream');
+  const all=new Uint8Array(got); let off=0;
+  for(const p of parts){all.set(p,off);off+=p.length;}
+  cachePut(MODEL_URL,all.buffer,'application/octet-stream');
   return all.buffer;
 }
 
