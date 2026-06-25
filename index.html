@@ -707,6 +707,10 @@ input:checked+.tog-sl::before{transform:translateX(19px);background:white}
     <div class="err-ttl" id="errTtl">Setup failed</div>
     <div class="err-msg"  id="errMsg"></div>
     <button class="btn" onclick="location.reload()">↺ Try Again</button>
+    <button class="btn" id="clearCacheBtn" style="margin-top:8px;background:var(--elev);font-size:13px"
+      onclick="clearCacheThenReload()">🗑 Clear cache &amp; retry</button>
+    <button class="btn" id="copyErrBtn" style="margin-top:8px;background:var(--elev);font-size:13px"
+      onclick="copyErrDiag()">📋 Copy diagnostic info</button>
     <a class="err-alt" href="https://birdnet-team.github.io/real-time-pwa/" target="_blank">
       Or use official BirdNET Live →
     </a>
@@ -1019,13 +1023,17 @@ window.addEventListener('load', async () => {
   }catch(e){}
   try {
     setStep(1); setProg(5);
-    labels=await loadLabels(); setStep(1,true);
+    labels = await loadLabels(); setStep(1,true);
     setStep(2); setProg(10);
-    const buf=await downloadModel(); setStep(2,true);
+    const buf = await downloadModel(); setStep(2,true);
     setStep(3); setProg(88);
-    ortSession=await ort.InferenceSession.create(buf,{
-      executionProviders:['wasm'], graphOptimizationLevel:'all'
-    });
+    try{
+      ortSession = await ort.InferenceSession.create(buf, {
+        executionProviders: ['wasm'], graphOptimizationLevel: 'all'
+      });
+    }catch(e){
+      throw new Error(`ONNX session failed: ${e.message||e}\n\nTry: Clear cache & retry below.`);
+    }
     setStep(3,true); setProg(100);
     await sleep(300);
     setupCanvases();
@@ -1055,51 +1063,127 @@ window.addEventListener('load', async () => {
    LABELS
 ════════════════════════════════════════════════ */
 async function loadLabels(){
-  let text=await cacheGet(LABELS_URL,'text');
+  let text = await cacheGet(LABELS_URL, 'text');
   if(!text){
-    let r;
-    try{ r=await fetch(LABELS_URL); }
-    catch(e){ throw new Error('No internet. Connect and reload for first-time setup.'); }
-    if(!r.ok) throw new Error(`Labels not found (HTTP ${r.status})`);
-    text=await r.text();
-    cachePut(LABELS_URL,text,'text/plain');
+    let r, lastErr;
+    for(let attempt = 0; attempt < 3; attempt++){
+      try{
+        if(attempt > 0) await sleep(1000 * attempt);
+        r = await fetch(LABELS_URL, {
+          mode: 'cors',
+          cache: 'no-store',
+          redirect: 'follow'
+        });
+        if(r.ok) break;
+        lastErr = `Labels server returned HTTP ${r.status}`;
+        r = null;
+      }catch(e){
+        lastErr = e.message || String(e);
+        r = null;
+      }
+    }
+    if(!r) throw new Error('Could not load labels: ' + lastErr);
+    text = await r.text();
+    cachePut(LABELS_URL, text, 'text/plain');
   }
-  return text.trim().split('\n').map(line=>{
-    line=line.trim(); const i=line.indexOf('_');
-    if(i<0) return{sci:line,com:line};
-    return{sci:line.slice(0,i),com:line.slice(i+1)};
-  }).filter(l=>l.sci.length>0);
+  return text.trim().split('\n').map(line => {
+    line = line.trim();
+    const i = line.indexOf('_');
+    if(i < 0) return {sci: line, com: line};
+    return {sci: line.slice(0, i), com: line.slice(i + 1)};
+  }).filter(l => l.sci.length > 0);
 }
 
 /* ════════════════════════════════════════════════
    MODEL DOWNLOAD
 ════════════════════════════════════════════════ */
 async function downloadModel(){
-  const cached=await cacheGet(MODEL_URL,'buffer');
+  const cached = await cacheGet(MODEL_URL, 'buffer');
   if(cached){
     setProg(85);
-    document.getElementById('st2txt').textContent='Loading cached model…';
+    document.getElementById('st2txt').textContent = 'Loading cached model…';
     return cached;
   }
-  let res;
-  try{ res=await fetch(MODEL_URL); }
-  catch(e){ throw new Error('Cannot reach HuggingFace. Check internet connection.'); }
-  if(!res.ok) throw new Error(`Model download failed (HTTP ${res.status})`);
-  const total=parseInt(res.headers.get('Content-Length')||'0');
-  const reader=res.body.getReader();
-  const parts=[]; let got=0;
-  while(true){
-    const{done,value}=await reader.read(); if(done) break;
-    parts.push(value); got+=value.length;
-    if(total>0){
-      setProg(10+Math.round(got/total*72));
-      document.getElementById('st2txt').textContent=
-        `Downloading BirdNET… ${(got/1e6).toFixed(1)} / ${(total/1e6).toFixed(1)} MB`;
+
+  // ── Probe first so we can give a clear error before committing to download ──
+  document.getElementById('st2txt').textContent = 'Connecting to model server…';
+  let probeOk = false;
+  let probeErr = '';
+  try{
+    const probe = await fetch(LABELS_URL, {
+      method: 'HEAD',
+      mode: 'cors',
+      cache: 'no-store',
+      redirect: 'follow',
+      signal: AbortSignal.timeout(8000)
+    });
+    probeOk = probe.ok || probe.status === 405; // 405 = HEAD not allowed but server is up
+  }catch(e){
+    probeErr = e.message || String(e);
+  }
+
+  if(!probeOk){
+    // Give a meaningful diagnostic
+    const detail = probeErr
+      ? `Network error: ${probeErr}`
+      : 'Server unreachable (possible CORS block or no internet)';
+    throw new Error(
+      `Cannot reach model server.\n\n${detail}\n\n` +
+      `• Check your internet connection\n` +
+      `• If on a VPN or restrictive network, try disabling it\n` +
+      `• Safari users: ensure "Prevent cross-site tracking" allows huggingface.co`
+    );
+  }
+
+  // ── Stream download with retries ──
+  let res, lastErr;
+  for(let attempt = 0; attempt < 3; attempt++){
+    try{
+      if(attempt > 0){
+        document.getElementById('st2txt').textContent = `Retrying download (attempt ${attempt + 1})…`;
+        await sleep(1500 * attempt);
+      }
+      res = await fetch(MODEL_URL, {
+        mode: 'cors',
+        cache: 'no-store',
+        redirect: 'follow'
+      });
+      if(res.ok) break;
+      lastErr = `HTTP ${res.status} ${res.statusText}`;
+      res = null;
+    }catch(e){
+      lastErr = e.message || String(e);
+      res = null;
     }
   }
-  const all=new Uint8Array(got); let off=0;
-  for(const p of parts){all.set(p,off);off+=p.length;}
-  cachePut(MODEL_URL,all.buffer,'application/octet-stream');
+
+  if(!res) throw new Error(`Model download failed after 3 attempts: ${lastErr}`);
+
+  const total = parseInt(res.headers.get('Content-Length') || '0');
+  const reader = res.body.getReader();
+  const parts = []; let got = 0;
+
+  try{
+    while(true){
+      const {done, value} = await reader.read();
+      if(done) break;
+      parts.push(value); got += value.length;
+      if(total > 0){
+        setProg(10 + Math.round(got / total * 72));
+        document.getElementById('st2txt').textContent =
+          `Downloading BirdNET… ${(got/1e6).toFixed(1)} / ${(total/1e6).toFixed(1)} MB`;
+      } else {
+        document.getElementById('st2txt').textContent =
+          `Downloading BirdNET… ${(got/1e6).toFixed(1)} MB`;
+      }
+    }
+  }catch(e){
+    throw new Error(`Download interrupted: ${e.message || e}. Please try again.`);
+  }
+
+  const all = new Uint8Array(got); let off = 0;
+  for(const p of parts){ all.set(p, off); off += p.length; }
+  cachePut(MODEL_URL, all.buffer, 'application/octet-stream');
   return all.buffer;
 }
 
@@ -2673,10 +2757,42 @@ function setStep(n,done){
   });
 }
 function setProg(pct){document.getElementById('progFill').style.width=Math.min(100,pct)+'%';}
-function showErr(ttl,msg){
-  document.getElementById('errTtl').textContent=ttl;
-  document.getElementById('errMsg').textContent=msg;
+
+let _lastErrDiag = '';
+function showErr(ttl, msg){
+  document.getElementById('errTtl').textContent = ttl;
+  // Render newlines in the error message
+  const el = document.getElementById('errMsg');
+  el.innerHTML = '';
+  String(msg).split('\n').forEach((line, i) => {
+    if(i > 0) el.appendChild(document.createElement('br'));
+    el.appendChild(document.createTextNode(line));
+  });
+  // Build diagnostic string for clipboard
+  _lastErrDiag = [
+    `Aviara Error Report`,
+    `Time: ${new Date().toISOString()}`,
+    `URL: ${location.href}`,
+    `UA: ${navigator.userAgent}`,
+    `Online: ${navigator.onLine}`,
+    `Error: ${ttl}`,
+    `Detail: ${msg}`
+  ].join('\n');
   show('ER');
+}
+function copyErrDiag(){
+  navigator.clipboard?.writeText(_lastErrDiag).then(()=>{
+    document.getElementById('copyErrBtn').textContent = '✓ Copied!';
+    setTimeout(()=>{ document.getElementById('copyErrBtn').textContent = '📋 Copy diagnostic info'; }, 2000);
+  }).catch(()=>{ alert(_lastErrDiag); });
+}
+async function clearCacheThenReload(){
+  try{
+    const c = await caches.open(CACHE_KEY);
+    await c.delete(MODEL_URL);
+    await c.delete(LABELS_URL);
+  }catch(e){}
+  location.reload();
 }
 
 /* ════════════════════════════════════════════════
