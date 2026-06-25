@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:; connect-src https://huggingface.co https://*.huggingface.co https://cdn-lfs.huggingface.co https://cdn-lfs-us-1.huggingface.co https://cdn-lfs-eu-1.huggingface.co https://api.inaturalist.org https://en.wikipedia.org https://nominatim.openstreetmap.org https://api.open-meteo.com https://unpkg.com https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com; worker-src blob: 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src https://fonts.gstatic.com data:; img-src * data: blob:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data:; connect-src 'self' https://api.inaturalist.org https://en.wikipedia.org https://nominatim.openstreetmap.org https://api.open-meteo.com https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com; worker-src blob: 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src https://fonts.gstatic.com data:; img-src * data: blob:;">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1069,11 +1069,7 @@ async function loadLabels(){
     for(let attempt = 0; attempt < 3; attempt++){
       try{
         if(attempt > 0) await sleep(1000 * attempt);
-        r = await fetch(LABELS_URL, {
-          mode: 'cors',
-          cache: 'no-store',
-          redirect: 'follow'
-        });
+        r = await fetch(LABELS_URL);
         if(r.ok) break;
         lastErr = `Labels server returned HTTP ${r.status}`;
         r = null;
@@ -1105,33 +1101,26 @@ async function downloadModel(){
     return cached;
   }
 
-  // ── Probe first so we can give a clear error before committing to download ──
+  // ── Quick connectivity probe before committing to large download ──
   document.getElementById('st2txt').textContent = 'Connecting to model server…';
   let probeOk = false;
   let probeErr = '';
   try{
+    // Plain fetch — no mode:'cors', same as original working code
     const probe = await fetch(LABELS_URL, {
       method: 'HEAD',
-      mode: 'cors',
-      cache: 'no-store',
-      redirect: 'follow',
       signal: AbortSignal.timeout(8000)
     });
-    probeOk = probe.ok || probe.status === 405; // 405 = HEAD not allowed but server is up
+    probeOk = probe.ok || probe.status === 405;
   }catch(e){
     probeErr = e.message || String(e);
   }
 
   if(!probeOk){
-    // Give a meaningful diagnostic
-    const detail = probeErr
-      ? `Network error: ${probeErr}`
-      : 'Server unreachable (possible CORS block or no internet)';
     throw new Error(
-      `Cannot reach model server.\n\n${detail}\n\n` +
-      `• Check your internet connection\n` +
-      `• If on a VPN or restrictive network, try disabling it\n` +
-      `• Safari users: ensure "Prevent cross-site tracking" allows huggingface.co`
+      `Cannot reach model server.\n\nDetail: ${probeErr||'No response'}\n\n` +
+      `• Check your internet connection and try again\n` +
+      `• The model host (huggingface.co) may be temporarily down`
     );
   }
 
@@ -1143,11 +1132,7 @@ async function downloadModel(){
         document.getElementById('st2txt').textContent = `Retrying download (attempt ${attempt + 1})…`;
         await sleep(1500 * attempt);
       }
-      res = await fetch(MODEL_URL, {
-        mode: 'cors',
-        cache: 'no-store',
-        redirect: 'follow'
-      });
+      res = await fetch(MODEL_URL);   // plain fetch — no mode:'cors', same as original
       if(res.ok) break;
       lastErr = `HTTP ${res.status} ${res.statusText}`;
       res = null;
@@ -2839,10 +2824,6 @@ function safeJSON(str, fallback=null){
 
 /* Validate a URL is one of our approved origins before fetch */
 const ALLOWED_ORIGINS = new Set([
-  'https://huggingface.co',
-  'https://cdn-lfs.huggingface.co',
-  'https://cdn-lfs-us-1.huggingface.co',
-  'https://cdn-lfs-eu-1.huggingface.co',
   'https://api.inaturalist.org',
   'https://en.wikipedia.org',
   'https://nominatim.openstreetmap.org',
